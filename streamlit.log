@@ -1,0 +1,6 @@
+Unhandled exception in FSEventsEmitter
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.11/site-packages/watchdog/observers/fsevents.py", line 315, in run
+    _fsevents.add_watch(self, self.watch, self.events_callback, self.pathnames)
+SystemError: Cannot start fsevents stream. Use a kqueue or polling observer instead.
+2025-12-27 04:41:42.730 Port 8501 is already in use

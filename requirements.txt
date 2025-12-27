@@ -1,0 +1,9 @@
+# M3 MacBook Pro (Apple Silicon ARM64) 対応パッケージ
+# すべてのパッケージはARM64アーキテクチャをサポートしています
+
+streamlit>=1.28.0
+pandas>=2.0.0
+requests>=2.31.0
+reportlab>=4.0.0
+python-docx>=1.1.0
+

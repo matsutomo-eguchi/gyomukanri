@@ -1,0 +1,55 @@
+# Streamlit Cloud用設定ファイル
+# このファイルはStreamlit Cloudで使用する設定です
+# ローカル環境では config.toml を使用してください
+
+[server]
+# Streamlit Cloud用の設定
+headless = true
+port = 8501
+address = "0.0.0.0"  # クラウド環境では0.0.0.0を使用
+enableCORS = false
+enableXsrfProtection = true
+
+# ファイル監視設定
+fileWatcherType = "auto"
+runOnSave = false  # クラウド環境ではfalse
+
+# メモリとパフォーマンス設定
+maxUploadSize = 200
+maxMessageSize = 200
+
+[browser]
+# ブラウザ設定
+gatherUsageStats = false
+
+[theme]
+# テーマ設定
+primaryColor = "#4ECDC4"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#262730"
+font = "sans serif"
+
+[runner]
+# パフォーマンス最適化
+fastReruns = true
+magicEnabled = true
+installTracer = false
+fixMatplotlib = true
+
+[client]
+# クライアント設定
+showErrorDetails = true
+toolbarMode = "auto"
+
+[ui]
+# UI設定
+hideTopBar = false
+hideSidebarNav = false
+
+
+
+
+
+
+

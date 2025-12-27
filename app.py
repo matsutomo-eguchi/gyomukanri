@@ -1,0 +1,1418 @@
+"""
+放課後等デイサービス 業務管理フォーム（日報）
+Streamlitアプリケーション
+"""
+import streamlit as st
+import os
+from datetime import date, datetime, time
+from typing import Dict, List, Optional
+import pandas as pd
+import tempfile
+
+from data_manager import DataManager
+from ai_helper import AIHelper
+from accident_report_generator import AccidentReportGenerator
+from hiyari_hatto_generator import HiyariHattoGenerator
+
+
+# ページ設定
+st.set_page_config(
+    page_title="業務管理フォーム",
+    page_icon="📋",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# カスタムCSS
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #FF6B6B;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .section-header {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #4ECDC4;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #4ECDC4;
+        padding-bottom: 0.5rem;
+    }
+    .stButton>button {
+        width: 100%;
+        background-color: #4ECDC4;
+        color: white;
+        font-weight: bold;
+        border-radius: 5px;
+        padding: 0.5rem 1rem;
+    }
+    .stButton>button:hover {
+        background-color: #45B8B0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# セッション状態の初期化
+if 'data_manager' not in st.session_state:
+    st.session_state.data_manager = DataManager()
+
+if 'ai_helper' not in st.session_state:
+    # APIキーの取得（優先順位: 環境変数 > Streamlit Secrets > 保存された設定）
+    api_key = None
+    
+    # 1. 環境変数から取得
+    api_key = os.getenv("GROK_API_KEY", None)
+    
+    # 2. Streamlit Secretsから取得
+    if not api_key:
+        try:
+            if hasattr(st, 'secrets') and hasattr(st.secrets, 'get'):
+                api_key = st.secrets.get("GROK_API_KEY", None)
+        except (FileNotFoundError, AttributeError):
+            pass
+    
+    # 3. 保存された設定から取得
+    if not api_key:
+        api_key = st.session_state.data_manager.get_api_key()
+    
+    st.session_state.ai_helper = AIHelper(api_key=api_key)
+
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = "日報入力"
+
+# 定型タグの定義（初期値、データマネージャーから動的に取得される）
+LEARNING_TAGS_DEFAULT = [
+    "プリント学習", "宿題", "SST（ソーシャルスキルトレーニング）", 
+    "読み書き練習", "計算練習", "工作", "絵本の読み聞かせ"
+]
+
+FREE_PLAY_TAGS_DEFAULT = [
+    "ブロック遊び", "お絵描き", "読書", "パズル", "カードゲーム",
+    "ままごと", "積み木", "折り紙", "ぬりえ", "音楽鑑賞"
+]
+
+GROUP_PLAY_TAGS_DEFAULT = [
+    "リトミック", "体操", "公園遊び", "ボール遊び", "鬼ごっこ",
+    "ダンス", "集団ゲーム", "散歩", "運動遊び", "歌"
+]
+
+VEHICLE_OPTIONS = [
+    "ノア", "セレナ（シルバー）", "セレナ（白）"
+]
+
+
+def generate_time_options():
+    """5分刻みの時刻リストを生成（9:00〜18:30の範囲）"""
+    times = []
+    # 9:00から18:30まで
+    start_hour = 9
+    end_hour = 18
+    end_minute = 30
+    
+    for hour in range(start_hour, end_hour + 1):
+        minute_range = range(0, 60, 5) if hour < end_hour else range(0, end_minute + 1, 5)
+        for minute in minute_range:
+            time_str = f"{hour:02d}:{minute:02d}"
+            times.append(time_str)
+    return times
+
+
+def render_sidebar():
+    """サイドバーの描画"""
+    with st.sidebar:
+        st.title("📋 業務管理フォーム")
+        st.markdown("---")
+        
+        # ページ選択
+        page = st.radio(
+            "メニュー",
+            ["日報入力", "利用者マスタ管理", "設定"],
+            key="page_selector"
+        )
+        st.session_state.current_page = page
+        
+        st.markdown("---")
+        
+        # 基本情報（全ページ共通）
+        st.subheader("基本情報")
+        work_date = st.date_input(
+            "業務日",
+            value=date.today(),
+            key="work_date"
+        )
+        
+        staff_name = st.text_input(
+            "記入スタッフ名",
+            value=st.session_state.get("staff_name", ""),
+            key="staff_name"
+        )
+        
+        st.markdown("---")
+        
+        # 勤務時間
+        col1, col2 = st.columns(2)
+        with col1:
+            start_time = st.time_input("始業時間", value=time(9, 0), key="start_time")
+        with col2:
+            end_time = st.time_input("終業時間", value=time(17, 0), key="end_time")
+
+
+def render_ai_assistant(text_area_key: str, child_name: Optional[str] = None):
+    """AI文章生成アシストUI"""
+    st.markdown("#### 🤖 AI文章作成アシスト")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        keywords = st.text_area(
+            "キーワードや箇条書きを入力してください",
+            height=100,
+            key=f"keywords_{text_area_key}",
+            placeholder="例: 機嫌良し、給食完食、公園で鬼ごっこを楽しむ、お友達と仲良く遊ぶ"
+        )
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        generate_btn = st.button("✨ 文章生成", key=f"generate_{text_area_key}", use_container_width=True)
+        improve_btn = st.button("📝 文章改善", key=f"improve_{text_area_key}", use_container_width=True)
+    
+    if generate_btn and keywords:
+        with st.spinner("AIが文章を生成中..."):
+            success, result = st.session_state.ai_helper.generate_report_text(keywords, child_name)
+            if success:
+                st.session_state[f"generated_text_{text_area_key}"] = result
+                st.success("文章を生成しました！")
+            else:
+                st.error(result)
+    
+    if improve_btn:
+        current_text = st.session_state.get(text_area_key, "")
+        if current_text:
+            with st.spinner("AIが文章を改善中..."):
+                success, result = st.session_state.ai_helper.improve_text(current_text)
+                if success:
+                    st.session_state[f"generated_text_{text_area_key}"] = result
+                    st.success("文章を改善しました！")
+                else:
+                    st.error(result)
+        else:
+            st.warning("改善したい文章を先に入力してください。")
+    
+    # 生成された文章の表示と適用
+    if f"generated_text_{text_area_key}" in st.session_state:
+        st.markdown("**生成された文章:**")
+        st.text_area(
+            "プレビュー",
+            value=st.session_state[f"generated_text_{text_area_key}"],
+            height=150,
+            key=f"preview_{text_area_key}",
+            disabled=True
+        )
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("✅ この文章を使用", key=f"apply_{text_area_key}"):
+                st.session_state[text_area_key] = st.session_state[f"generated_text_{text_area_key}"]
+                del st.session_state[f"generated_text_{text_area_key}"]
+                st.rerun()
+        with col2:
+            if st.button("❌ キャンセル", key=f"cancel_{text_area_key}"):
+                del st.session_state[f"generated_text_{text_area_key}"]
+                st.rerun()
+
+
+def render_accident_ai_assistant(text_area_key: str, report_type: str):
+    """事故報告書用AI文章生成アシストUI"""
+    st.markdown(f"#### 🤖 AI文章作成アシスト（{report_type}）")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        keywords = st.text_area(
+            "キーワードや箇条書きを入力してください",
+            height=80,
+            key=f"keywords_{text_area_key}",
+            placeholder="例: プレイルーム、バランスボール、転倒しそうになった、マットがなかった"
+        )
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        generate_btn = st.button("✨ 文章生成", key=f"generate_{text_area_key}", use_container_width=True)
+    
+    if generate_btn and keywords:
+        with st.spinner("AIが文章を生成中..."):
+            success, result = st.session_state.ai_helper.generate_accident_report(keywords, report_type)
+            if success:
+                st.session_state[f"generated_text_{text_area_key}"] = result
+                st.success("文章を生成しました！")
+            else:
+                st.error(result)
+    
+    # 生成された文章の表示と適用
+    if f"generated_text_{text_area_key}" in st.session_state:
+        st.markdown("**生成された文章:**")
+        st.text_area(
+            "プレビュー",
+            value=st.session_state[f"generated_text_{text_area_key}"],
+            height=100,
+            key=f"preview_{text_area_key}",
+            disabled=True
+        )
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("✅ この文章を使用", key=f"apply_{text_area_key}"):
+                st.session_state[text_area_key] = st.session_state[f"generated_text_{text_area_key}"]
+                del st.session_state[f"generated_text_{text_area_key}"]
+                st.rerun()
+        with col2:
+            if st.button("❌ キャンセル", key=f"cancel_{text_area_key}"):
+                del st.session_state[f"generated_text_{text_area_key}"]
+                st.rerun()
+
+
+def render_hiyari_ai_assistant(text_area_key: str, report_type: str):
+    """ヒヤリハット報告書用AI文章生成アシストUI"""
+    type_names = {
+        "context": "どうしていた時",
+        "details": "ヒヤリとした時のあらまし",
+        "countermeasure": "教訓・対策"
+    }
+    type_name = type_names.get(report_type, report_type)
+    
+    st.markdown(f"#### 🤖 AI文章作成アシスト（{type_name}）")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        keywords = st.text_area(
+            "キーワードや箇条書きを入力してください",
+            height=80,
+            key=f"keywords_{text_area_key}",
+            placeholder="例: 送迎車から降りる際、バランスを崩した、マットがなかった"
+        )
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        generate_btn = st.button("✨ 文章生成", key=f"generate_{text_area_key}", use_container_width=True)
+    
+    if generate_btn and keywords:
+        with st.spinner("AIが文章を生成中..."):
+            success, result = st.session_state.ai_helper.generate_hiyari_hatto_report(keywords, report_type)
+            if success:
+                st.session_state[f"generated_text_{text_area_key}"] = result
+                st.success("文章を生成しました！")
+            else:
+                st.error(result)
+    
+    # 生成された文章の表示と適用
+    if f"generated_text_{text_area_key}" in st.session_state:
+        st.markdown("**生成された文章:**")
+        st.text_area(
+            "プレビュー",
+            value=st.session_state[f"generated_text_{text_area_key}"],
+            height=100,
+            key=f"preview_{text_area_key}",
+            disabled=True
+        )
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("✅ この文章を使用", key=f"apply_{text_area_key}"):
+                st.session_state[text_area_key] = st.session_state[f"generated_text_{text_area_key}"]
+                del st.session_state[f"generated_text_{text_area_key}"]
+                st.rerun()
+        with col2:
+            if st.button("❌ キャンセル", key=f"cancel_{text_area_key}"):
+                del st.session_state[f"generated_text_{text_area_key}"]
+                st.rerun()
+
+
+def render_daily_report_form():
+    """日報入力フォームの描画"""
+    st.markdown('<div class="main-header">📋 日報入力</div>', unsafe_allow_html=True)
+    
+    # 利用者リストを取得
+    users = st.session_state.data_manager.get_active_users()
+    
+    if not users:
+        st.warning("⚠️ 利用者が登録されていません。先に「利用者マスタ管理」で利用者を追加してください。")
+        return
+    
+    # 複数名担当対応のため、タブを使用（最大15名まで）
+    tab_labels = [f"担当児童{i+1}" for i in range(15)]
+    tabs = st.tabs(tab_labels)
+    
+    all_reports = []
+    
+    for tab_idx, tab in enumerate(tabs):
+        with tab:
+            st.markdown(f'<div class="section-header">担当児童 {tab_idx + 1}</div>', unsafe_allow_html=True)
+            
+            # 担当利用者名（フォーム外）
+            child_name = st.selectbox(
+                "担当利用者名 *",
+                options=[""] + users,
+                key=f"child_name_{tab_idx}",
+                help="連絡帳を作成する児童を選択してください"
+            )
+            
+            if child_name:  # 児童が選択されている場合のみフォームを表示
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("#### バイタル")
+                        temperature = st.number_input(
+                            "体温 *",
+                            min_value=34.0,
+                            max_value=42.0,
+                            value=36.5,
+                            step=0.1,
+                            format="%.1f",
+                            key=f"temperature_{tab_idx}"
+                        )
+                        vital_other = st.text_input(
+                            "その他（血圧、脈拍、SPO2等）",
+                            key=f"vital_other_{tab_idx}"
+                        )
+                        
+                        mood = st.radio(
+                            "気分・顔色",
+                            options=["良", "普通", "悪"],
+                            horizontal=True,
+                            key=f"mood_{tab_idx}"
+                        )
+                    
+                    with col2:
+                        st.markdown("#### 食事・健康")
+                        meal_status = st.radio(
+                            "食事・おやつ",
+                            options=["完食", "残食あり", "未摂取"],
+                            key=f"meal_status_{tab_idx}"
+                        )
+                        meal_detail = st.text_input(
+                            "メニュー内容",
+                            key=f"meal_detail_{tab_idx}",
+                            placeholder="例: カレーライス、おにぎり"
+                        )
+                        water_intake = st.number_input(
+                            "水分補給量 (ml)",
+                            min_value=0,
+                            value=0,
+                            key=f"water_{tab_idx}"
+                        )
+                        excretion = st.text_input(
+                            "排泄記録",
+                            key=f"excretion_{tab_idx}",
+                            placeholder="例: 2回、便あり"
+                        )
+                    
+                    st.markdown("#### 活動内容")
+                    
+                    # 学習内容（フォーム外）
+                    learning_tags_list = st.session_state.data_manager.get_tags("learning")
+                    learning_tags = st.multiselect(
+                        "学習内容 *",
+                        options=learning_tags_list,
+                        key=f"learning_tags_{tab_idx}"
+                    )
+                    # 学習内容タグ追加・削除（フォーム外）
+                    col_learn1, col_learn2 = st.columns([3, 1])
+                    with col_learn1:
+                        new_learning_tag = st.text_input(
+                            "新しい学習内容タグを追加",
+                            key=f"new_learning_tag_{tab_idx}",
+                            placeholder="例: プログラミング学習"
+                        )
+                    with col_learn2:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        if st.button("追加", key=f"add_learning_tag_{tab_idx}", use_container_width=True):
+                            if new_learning_tag and new_learning_tag.strip():
+                                if st.session_state.data_manager.add_tag("learning", new_learning_tag):
+                                    st.success(f"✅ '{new_learning_tag}' を追加しました")
+                                    st.rerun()
+                                else:
+                                    st.error("既に登録されているか、追加に失敗しました")
+                            else:
+                                st.warning("タグ名を入力してください")
+                    
+                    # 学習内容タグ削除
+                    if learning_tags_list:
+                        with st.expander("🗑️ 学習内容タグを削除", expanded=False):
+                            tags_to_delete_learn = st.multiselect(
+                                "削除するタグを選択",
+                                options=learning_tags_list,
+                                key=f"delete_learning_tags_{tab_idx}"
+                            )
+                            if st.button("選択したタグを削除", key=f"confirm_delete_learning_{tab_idx}", type="secondary"):
+                                if tags_to_delete_learn:
+                                    deleted_count = 0
+                                    for tag in tags_to_delete_learn:
+                                        if st.session_state.data_manager.delete_tag("learning", tag):
+                                            deleted_count += 1
+                                    if deleted_count > 0:
+                                        st.success(f"✅ {deleted_count}個のタグを削除しました")
+                                        st.rerun()
+                                else:
+                                    st.warning("削除するタグを選択してください")
+                    
+                    # 学習内容の詳細（フォーム外）
+                    learning_detail = st.text_area(
+                        "学習内容の詳細",
+                        height=80,
+                        key=f"learning_detail_{tab_idx}",
+                        placeholder="実施した内容の詳細を記入してください"
+                    )
+                    
+                    # 自由遊び（フォーム外）
+                    free_play_tags_list = st.session_state.data_manager.get_tags("free_play")
+                    free_play_tags = st.multiselect(
+                        "自由遊び *",
+                        options=free_play_tags_list,
+                        key=f"free_play_tags_{tab_idx}"
+                    )
+                    # 自由遊びタグ追加・削除（フォーム外）
+                    col_free1, col_free2 = st.columns([3, 1])
+                    with col_free1:
+                        new_free_play_tag = st.text_input(
+                            "新しい自由遊びタグを追加",
+                            key=f"new_free_play_tag_{tab_idx}",
+                            placeholder="例: レゴブロック"
+                        )
+                    with col_free2:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        if st.button("追加", key=f"add_free_play_tag_{tab_idx}", use_container_width=True):
+                            if new_free_play_tag and new_free_play_tag.strip():
+                                if st.session_state.data_manager.add_tag("free_play", new_free_play_tag):
+                                    st.success(f"✅ '{new_free_play_tag}' を追加しました")
+                                    st.rerun()
+                                else:
+                                    st.error("既に登録されているか、追加に失敗しました")
+                            else:
+                                st.warning("タグ名を入力してください")
+                    
+                    # 自由遊びタグ削除
+                    if free_play_tags_list:
+                        with st.expander("🗑️ 自由遊びタグを削除", expanded=False):
+                            tags_to_delete_free = st.multiselect(
+                                "削除するタグを選択",
+                                options=free_play_tags_list,
+                                key=f"delete_free_play_tags_{tab_idx}"
+                            )
+                            if st.button("選択したタグを削除", key=f"confirm_delete_free_{tab_idx}", type="secondary"):
+                                if tags_to_delete_free:
+                                    deleted_count = 0
+                                    for tag in tags_to_delete_free:
+                                        if st.session_state.data_manager.delete_tag("free_play", tag):
+                                            deleted_count += 1
+                                    if deleted_count > 0:
+                                        st.success(f"✅ {deleted_count}個のタグを削除しました")
+                                        st.rerun()
+                                else:
+                                    st.warning("削除するタグを選択してください")
+                    
+                    # 自由遊びの詳細（フォーム外）
+                    free_play_detail = st.text_area(
+                        "自由遊びの詳細",
+                        height=80,
+                        key=f"free_play_detail_{tab_idx}",
+                        placeholder="実施した内容の詳細を記入してください"
+                    )
+                    
+                    # 集団遊び（フォーム外）
+                    group_play_tags_list = st.session_state.data_manager.get_tags("group_play")
+                    group_play_tags = st.multiselect(
+                        "集団遊び *",
+                        options=group_play_tags_list,
+                        key=f"group_play_tags_{tab_idx}"
+                    )
+                    # 集団遊びタグ追加・削除（フォーム外）
+                    col_group1, col_group2 = st.columns([3, 1])
+                    with col_group1:
+                        new_group_play_tag = st.text_input(
+                            "新しい集団遊びタグを追加",
+                            key=f"new_group_play_tag_{tab_idx}",
+                            placeholder="例: サッカー"
+                        )
+                    with col_group2:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        if st.button("追加", key=f"add_group_play_tag_{tab_idx}", use_container_width=True):
+                            if new_group_play_tag and new_group_play_tag.strip():
+                                if st.session_state.data_manager.add_tag("group_play", new_group_play_tag):
+                                    st.success(f"✅ '{new_group_play_tag}' を追加しました")
+                                    st.rerun()
+                                else:
+                                    st.error("既に登録されているか、追加に失敗しました")
+                            else:
+                                st.warning("タグ名を入力してください")
+                    
+                    # 集団遊びタグ削除
+                    if group_play_tags_list:
+                        with st.expander("🗑️ 集団遊びタグを削除", expanded=False):
+                            tags_to_delete_group = st.multiselect(
+                                "削除するタグを選択",
+                                options=group_play_tags_list,
+                                key=f"delete_group_play_tags_{tab_idx}"
+                            )
+                            if st.button("選択したタグを削除", key=f"confirm_delete_group_{tab_idx}", type="secondary"):
+                                if tags_to_delete_group:
+                                    deleted_count = 0
+                                    for tag in tags_to_delete_group:
+                                        if st.session_state.data_manager.delete_tag("group_play", tag):
+                                            deleted_count += 1
+                                    if deleted_count > 0:
+                                        st.success(f"✅ {deleted_count}個のタグを削除しました")
+                                        st.rerun()
+                                else:
+                                    st.warning("削除するタグを選択してください")
+                    
+                    # 集団遊びの詳細（フォーム外）
+                    group_play_detail = st.text_area(
+                        "集団遊びの詳細",
+                        height=80,
+                        key=f"group_play_detail_{tab_idx}",
+                        placeholder="実施した内容の詳細を記入してください"
+                    )
+                    
+                    # 特記事項（AIアシスト付き、フォーム外）
+                    st.markdown("#### 特記事項 *")
+                    render_ai_assistant(f"notes_{tab_idx}", child_name)
+                    
+                    # フォーム内の項目
+                    with st.form(f"report_form_{tab_idx}", clear_on_submit=False):
+                        
+                        notes = st.text_area(
+                            "特記事項",
+                            height=150,
+                            key=f"notes_{tab_idx}",
+                            placeholder="保護者に伝えるべき詳細、変化、成長記録を記入してください",
+                            help="AIアシスト機能を使用して文章を作成することもできます"
+                        )
+                        
+                        # 送信ボタン
+                        submitted = st.form_submit_button(
+                            f"💾 保存（{child_name}）",
+                            use_container_width=True,
+                            type="primary"
+                        )
+                        
+                        if submitted:
+                            # バリデーション
+                            errors = []
+                            if not child_name:
+                                errors.append("担当利用者名を選択してください")
+                            if not learning_tags and not learning_detail:
+                                errors.append("学習内容を入力してください")
+                            if not free_play_tags and not free_play_detail:
+                                errors.append("自由遊びを入力してください")
+                            if not group_play_tags and not group_play_detail:
+                                errors.append("集団遊びを入力してください")
+                            if not notes:
+                                errors.append("特記事項を入力してください")
+                            
+                            if errors:
+                                for error in errors:
+                                    st.error(error)
+                            else:
+                                # データをまとめる
+                                report_data = {
+                                    "業務日": st.session_state.work_date.isoformat(),
+                                    "記入スタッフ名": st.session_state.staff_name,
+                                    "始業時間": st.session_state.start_time.strftime("%H:%M"),
+                                    "終業時間": st.session_state.end_time.strftime("%H:%M"),
+                                    "担当利用者名": child_name,
+                                    "体温": temperature,
+                                    "バイタルその他": vital_other,
+                                    "気分顔色": mood,
+                                    "学習内容タグ": ", ".join(learning_tags),
+                                    "学習内容詳細": learning_detail,
+                                    "自由遊びタグ": ", ".join(free_play_tags),
+                                    "自由遊び詳細": free_play_detail,
+                                    "集団遊びタグ": ", ".join(group_play_tags),
+                                    "集団遊び詳細": group_play_detail,
+                                    "食事状態": meal_status,
+                                    "食事詳細": meal_detail,
+                                    "水分補給量": water_intake,
+                                    "排泄記録": excretion,
+                                    "特記事項": notes
+                                }
+                                
+                                # 保存
+                                if st.session_state.data_manager.save_daily_report(report_data):
+                                    st.success(f"✅ {child_name}の日報を保存しました！")
+                                    st.balloons()
+                                    all_reports.append(report_data)
+                                else:
+                                    st.error("保存に失敗しました。")
+            else:
+                st.info("担当児童を選択すると、フォームが表示されます。")
+    
+    # 送迎業務記録
+    st.markdown("---")
+    st.markdown('<div class="section-header">🚗 送迎業務記録</div>', unsafe_allow_html=True)
+    
+    with st.expander("送迎業務を記録する", expanded=False):
+        # 迎え（行き）- 3回分（フォーム外のチェックボックス）
+        st.markdown("#### 🚗 迎え（行き）")
+        
+        pickup_enabled_list = []
+        for i in range(1, 4):
+            pickup_enabled = st.checkbox(f"迎え{i}回目を記録する", key=f"pickup_enabled_{i}")
+            pickup_enabled_list.append(pickup_enabled)
+            if i < 3:
+                st.markdown("---")
+        
+        st.markdown("---")
+        
+        # 送り（帰り）（フォーム外のチェックボックス）
+        st.markdown("#### 🚗 送り（帰り）")
+        dropoff_enabled = st.checkbox("送りを記録する", key="dropoff_enabled")
+        
+        st.markdown("---")
+        
+        # フォーム内の項目
+        with st.form("transport_form"):
+            pickup_data_list = []
+            for i in range(1, 4):
+                pickup_enabled = pickup_enabled_list[i - 1]
+                
+                # チェックが入っている場合のみ表示
+                if pickup_enabled:
+                    st.markdown(f"**迎え{i}回目**")
+                    pickup_vehicle = st.selectbox(
+                        f"使用車両（迎え{i}回目）",
+                        options=[""] + VEHICLE_OPTIONS,
+                        key=f"pickup_vehicle_{i}"
+                    )
+                    pickup_children = st.multiselect(
+                        f"迎えた児童名（迎え{i}回目）",
+                        options=users,
+                        max_selections=6,
+                        key=f"pickup_children_{i}",
+                        help="最大6名まで選択可能"
+                    )
+                    # 到着時刻（5分単位）
+                    time_options = generate_time_options()
+                    pickup_arrival_time = st.selectbox(
+                        f"到着時刻（迎え{i}回目）",
+                        options=[""] + time_options,
+                        key=f"pickup_arrival_time_{i}",
+                        help="5分単位で選択してください"
+                    )
+                    pickup_data_list.append({
+                        "enabled": True,
+                        "vehicle": pickup_vehicle,
+                        "children": pickup_children,
+                        "arrival_time": pickup_arrival_time,
+                        "index": i
+                    })
+                    if i < 3:
+                        st.markdown("---")
+                else:
+                    # チェックが外れている場合は空の値を設定
+                    pickup_data_list.append({
+                        "enabled": False,
+                        "vehicle": "",
+                        "children": [],
+                        "arrival_time": "",
+                        "index": i
+                    })
+            
+            # 送り（帰り）のフォーム内項目
+            if dropoff_enabled:
+                st.markdown("**送り**")
+                dropoff_vehicle = st.selectbox(
+                    "使用車両（送り）",
+                    options=[""] + VEHICLE_OPTIONS,
+                    key="dropoff_vehicle"
+                )
+                dropoff_children = st.multiselect(
+                    "送った児童名",
+                    options=users,
+                    max_selections=6,
+                    key="dropoff_children",
+                    help="最大6名まで選択可能"
+                )
+                # 退所時間（5分単位）
+                time_options = generate_time_options()
+                dropoff_departure_time = st.selectbox(
+                    "退所時間（送り）",
+                    options=[""] + time_options,
+                    key="dropoff_departure_time",
+                    help="5分単位で選択してください"
+                )
+            else:
+                dropoff_vehicle = ""
+                dropoff_children = []
+                dropoff_departure_time = ""
+            
+            transport_submitted = st.form_submit_button("💾 送迎記録を保存", use_container_width=True)
+            
+            if transport_submitted:
+                errors = []
+                success_messages = []
+                
+                # 迎えのバリデーションと保存
+                pickup_count = 0
+                for pickup_data in pickup_data_list:
+                    if pickup_data["enabled"]:
+                        pickup_count += 1
+                        if not pickup_data["vehicle"]:
+                            errors.append(f"迎え{pickup_data['index']}回目の使用車両を選択してください")
+                        if not pickup_data["children"]:
+                            errors.append(f"迎え{pickup_data['index']}回目の児童名を選択してください")
+                        elif len(pickup_data["children"]) > 6:
+                            errors.append(f"迎え{pickup_data['index']}回目の児童は最大6名までです")
+                
+                # 送りのバリデーション
+                if dropoff_enabled:
+                    if not dropoff_vehicle:
+                        errors.append("送りの使用車両を選択してください")
+                    if not dropoff_children:
+                        errors.append("送った児童名を選択してください")
+                    elif len(dropoff_children) > 6:
+                        errors.append("送りの児童は最大6名までです")
+                
+                if pickup_count == 0 and not dropoff_enabled:
+                    errors.append("迎えまたは送りのいずれかを記録してください")
+                
+                if errors:
+                    for error in errors:
+                        st.error(error)
+                else:
+                    # 迎えの記録を保存（有効なもののみ）
+                    for pickup_data in pickup_data_list:
+                        if pickup_data["enabled"]:
+                            pickup_record = {
+                                "業務日": st.session_state.work_date.isoformat(),
+                                "記入スタッフ名": st.session_state.staff_name,
+                                "送迎区分": f"迎え（{pickup_data['index']}回目）",
+                                "使用車両": pickup_data["vehicle"],
+                                "送迎児童名": ", ".join(pickup_data["children"]),
+                                "送迎人数": len(pickup_data["children"]),
+                                "到着時刻": pickup_data.get("arrival_time", "")
+                            }
+                            st.session_state.data_manager.save_daily_report(pickup_record)
+                            success_messages.append(f"迎え{pickup_data['index']}回目: {len(pickup_data['children'])}名")
+                    
+                    # 送りの記録を保存
+                    if dropoff_enabled:
+                        dropoff_data = {
+                            "業務日": st.session_state.work_date.isoformat(),
+                            "記入スタッフ名": st.session_state.staff_name,
+                            "送迎区分": "送り",
+                            "使用車両": dropoff_vehicle,
+                            "送迎児童名": ", ".join(dropoff_children),
+                            "送迎人数": len(dropoff_children),
+                            "退所時間": dropoff_departure_time
+                        }
+                        st.session_state.data_manager.save_daily_report(dropoff_data)
+                        success_messages.append(f"送り: {len(dropoff_children)}名")
+                    
+                    st.success(f"✅ 送迎記録を保存しました！ ({', '.join(success_messages)})")
+                    st.balloons()
+    
+    # 業務報告・共有事項
+    st.markdown("---")
+    st.markdown('<div class="section-header">📢 業務報告・共有事項</div>', unsafe_allow_html=True)
+    
+    incident_toggle = st.toggle("ヒヤリハット・事故報告", key="incident_toggle")
+    
+    if incident_toggle:
+        # 報告書タイプの選択
+        report_type = st.radio(
+            "報告書タイプ",
+            ["事故報告書（PDF）", "ヒヤリハット報告書（PDF）"],
+            key="report_type",
+            horizontal=True,
+            index=0
+        )
+        
+        st.markdown("---")
+        
+        if report_type == "事故報告書（PDF）":
+            st.markdown("#### 📋 事故報告詳細")
+            
+            # 基本情報
+            col1, col2 = st.columns(2)
+            with col1:
+                incident_location = st.text_input(
+                    "発生場所 *",
+                    key="incident_location",
+                    placeholder="例: プレイルーム、送迎車内"
+                )
+                incident_subject = st.selectbox(
+                    "対象者 *",
+                    options=[""] + st.session_state.data_manager.get_active_users(),
+                    key="incident_subject"
+                )
+            
+            with col2:
+                incident_time_hour = st.number_input(
+                    "発生時刻（時）",
+                    min_value=0,
+                    max_value=23,
+                    value=datetime.now().hour,
+                    key="incident_time_hour"
+                )
+                incident_time_min = st.number_input(
+                    "発生時刻（分）",
+                    min_value=0,
+                    max_value=59,
+                    value=datetime.now().minute,
+                    key="incident_time_min"
+                )
+            
+            # 詳細情報（AIアシストはフォーム外）
+            render_accident_ai_assistant("incident_situation", "situation")
+            render_accident_ai_assistant("incident_process", "process")
+            render_accident_ai_assistant("incident_cause", "cause")
+            render_accident_ai_assistant("incident_countermeasure", "countermeasure")
+        else:
+            # ヒヤリハット報告書用のAIアシスト（フォーム外）
+            render_hiyari_ai_assistant("hiyari_context", "context")
+            render_hiyari_ai_assistant("hiyari_details", "details")
+            render_hiyari_ai_assistant("hiyari_countermeasure", "countermeasure")
+    
+    with st.form("report_form"):
+        # フォーム内の入力フィールド（セッション状態から取得）
+        form_incident_toggle = st.session_state.get("incident_toggle", False)
+        form_report_type = st.session_state.get("report_type", "事故報告書（PDF）")
+        
+        if form_incident_toggle:
+            if form_report_type == "事故報告書（PDF）":
+                # 詳細情報（フォーム内）
+                incident_situation = st.text_area(
+                    "事故発生の状況 *",
+                    height=100,
+                    key="incident_situation",
+                    placeholder="事故がどのように発生したか、具体的な状況を記入してください",
+                    value=st.session_state.get("incident_situation", "")
+                )
+                
+                incident_process = st.text_area(
+                    "経過 *",
+                    height=100,
+                    key="incident_process",
+                    placeholder="事故発生後の対応や経過を記入してください",
+                    value=st.session_state.get("incident_process", "")
+                )
+                
+                incident_cause = st.text_area(
+                    "事故原因 *",
+                    height=100,
+                    key="incident_cause",
+                    placeholder="事故の原因を分析して記入してください",
+                    value=st.session_state.get("incident_cause", "")
+                )
+                
+                incident_countermeasure = st.text_area(
+                    "対策 *",
+                    height=100,
+                    key="incident_countermeasure",
+                    placeholder="今後の対策や防止策を記入してください",
+                    value=st.session_state.get("incident_countermeasure", "")
+                )
+                
+                incident_others = st.text_area(
+                    "その他",
+                    height=80,
+                    key="incident_others",
+                    placeholder="その他の情報があれば記入してください"
+                )
+                
+                # 簡易版の詳細（従来の形式）
+                incident_detail = st.text_area(
+                    "簡易詳細（従来形式）",
+                    height=100,
+                    key="incident_detail",
+                    placeholder="発生状況、対応内容などを詳しく記入してください（PDF生成には上記の詳細項目を使用）"
+                )
+                
+                # ヒヤリハット用の変数を空に設定
+                hiyari_location = ""
+                hiyari_context = ""
+                hiyari_time_hour = datetime.now().hour
+                hiyari_time_min = datetime.now().minute
+                hiyari_details = ""
+                selected_causes = []
+                category_index = -1
+                hiyari_countermeasure = ""
+            else:
+                # ヒヤリハット報告書用の入力フィールド（フォーム内）
+                hiyari_context = st.text_area(
+                    "どうしていた時 *",
+                    height=80,
+                    key="hiyari_context",
+                    placeholder="例: 送迎車から降りる際、自由遊びの時間中",
+                    value=st.session_state.get("hiyari_context", "")
+                )
+                
+                hiyari_details = st.text_area(
+                    "ヒヤリとした時のあらまし *",
+                    height=120,
+                    key="hiyari_details",
+                    placeholder="ヒヤリとした時の具体的な状況を客観的に記述してください",
+                    value=st.session_state.get("hiyari_details", "")
+                )
+                
+                hiyari_countermeasure = st.text_area(
+                    "教訓・対策 *",
+                    height=120,
+                    key="hiyari_countermeasure",
+                    placeholder="具体的かつ実行可能なアクションプランを記入してください",
+                    value=st.session_state.get("hiyari_countermeasure", "")
+                )
+                
+                # 事故報告用の変数を空に設定
+                incident_location = ""
+                incident_subject = ""
+                incident_time_hour = datetime.now().hour
+                incident_time_min = datetime.now().minute
+                incident_situation = ""
+                incident_process = ""
+                incident_cause = ""
+                incident_countermeasure = ""
+                incident_others = ""
+                incident_detail = ""
+        else:
+            incident_detail = ""
+            incident_location = ""
+            incident_subject = ""
+            incident_time_hour = datetime.now().hour
+            incident_time_min = datetime.now().minute
+            incident_situation = ""
+            incident_process = ""
+            incident_cause = ""
+            incident_countermeasure = ""
+            incident_others = ""
+            report_type = ""
+            hiyari_location = ""
+            hiyari_context = ""
+            hiyari_time_hour = datetime.now().hour
+            hiyari_time_min = datetime.now().minute
+            hiyari_details = ""
+            selected_causes = []
+            category_index = -1
+            hiyari_countermeasure = ""
+        
+        handover = st.text_area(
+            "申し送り事項",
+            height=100,
+            key="handover",
+            placeholder="翌日以降のスタッフへの共有事項"
+        )
+        
+        request = st.text_input(
+            "備品購入・要望",
+            key="request",
+            placeholder="消耗品の補充依頼など"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            report_submitted = st.form_submit_button("💾 業務報告を保存", use_container_width=True)
+        with col2:
+            pdf_generate = st.form_submit_button("📄 PDF報告書を生成", use_container_width=True, type="secondary")
+        
+        if report_submitted:
+            form_incident_toggle = st.session_state.get("incident_toggle", False)
+            report_data = {
+                "業務日": st.session_state.work_date.isoformat(),
+                "記入スタッフ名": st.session_state.staff_name,
+                "ヒヤリハット事故": "あり" if form_incident_toggle else "なし",
+                "ヒヤリハット詳細": incident_detail if form_incident_toggle else "",
+                "発生場所": incident_location if form_incident_toggle else "",
+                "対象者": incident_subject if form_incident_toggle else "",
+                "事故発生の状況": incident_situation if form_incident_toggle else "",
+                "経過": incident_process if form_incident_toggle else "",
+                "事故原因": incident_cause if form_incident_toggle else "",
+                "対策": incident_countermeasure if form_incident_toggle else "",
+                "その他": incident_others if form_incident_toggle else "",
+                "申し送り事項": handover,
+                "備品購入要望": request
+            }
+            
+            if st.session_state.data_manager.save_daily_report(report_data):
+                st.success("✅ 業務報告を保存しました！")
+                st.balloons()
+            else:
+                st.error("保存に失敗しました。")
+        
+        if pdf_generate:
+            form_incident_toggle = st.session_state.get("incident_toggle", False)
+            form_report_type = st.session_state.get("report_type", "事故報告書（PDF）")
+            
+            if form_incident_toggle and form_report_type == "事故報告書（PDF）":
+                # バリデーション
+                errors = []
+                if not incident_location:
+                    errors.append("発生場所を入力してください")
+                if not incident_subject:
+                    errors.append("対象者を選択してください")
+                if not incident_situation:
+                    errors.append("事故発生の状況を入力してください")
+                if not incident_process:
+                    errors.append("経過を入力してください")
+                if not incident_cause:
+                    errors.append("事故原因を入力してください")
+                if not incident_countermeasure:
+                    errors.append("対策を入力してください")
+                
+                if errors:
+                    for error in errors:
+                        st.error(error)
+                else:
+                    try:
+                        # 日付情報の準備
+                        work_date = st.session_state.work_date
+                        date_info = AccidentReportGenerator.format_date_for_report(work_date)
+                        
+                        # PDF生成用のデータを準備
+                        pdf_data = {
+                            "facility_name": "放課後等デイサービス",  # 必要に応じて設定可能にする
+                            "date_year": date_info["date_year"],
+                            "date_month": date_info["date_month"],
+                            "date_day": date_info["date_day"],
+                            "date_weekday": date_info["date_weekday"],
+                            "time_hour": str(incident_time_hour).zfill(2),
+                            "time_min": str(incident_time_min).zfill(2),
+                            "location": incident_location,
+                            "subject_name": incident_subject,
+                            "situation": incident_situation,
+                            "process": incident_process,
+                            "cause": incident_cause,
+                            "countermeasure": incident_countermeasure,
+                            "others": incident_others,
+                            "reporter_name": st.session_state.staff_name,
+                            "record_date": work_date.strftime("%Y年%m月%d日")
+                        }
+                        
+                        # 一時ファイルにPDFを生成
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                            pdf_filename = tmp_file.name
+                            generator = AccidentReportGenerator(pdf_filename)
+                            generator.generate(pdf_data)
+                            
+                            # PDFファイルを読み込んでダウンロードボタンを表示
+                            with open(pdf_filename, "rb") as pdf_file:
+                                pdf_bytes = pdf_file.read()
+                                st.download_button(
+                                    label="📥 事故報告書PDFをダウンロード",
+                                    data=pdf_bytes,
+                                    file_name=f"事故報告書_{work_date.strftime('%Y%m%d')}_{incident_subject}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True
+                                )
+                            
+                            # 一時ファイルを削除
+                            os.unlink(pdf_filename)
+                            
+                            st.success("✅ PDF報告書を生成しました！")
+                            
+                    except Exception as e:
+                        st.error(f"PDF生成エラー: {str(e)}")
+                        st.exception(e)
+            
+            elif form_incident_toggle and form_report_type == "ヒヤリハット報告書（PDF）":
+                # バリデーション
+                errors = []
+                hiyari_location = st.session_state.get("hiyari_location", "")
+                hiyari_time_hour = st.session_state.get("hiyari_time_hour", datetime.now().hour)
+                hiyari_time_min = st.session_state.get("hiyari_time_min", datetime.now().minute)
+                selected_causes = []
+                for i in range(1, 13):
+                    if st.session_state.get(f"cause_{i}", False):
+                        selected_causes.append(i)
+                category_options = [
+                    "環境に問題があった",
+                    "設備・機器等に問題があった",
+                    "指導方法に問題があった",
+                    "自分自身に問題があった"
+                ]
+                selected_category = st.session_state.get("hiyari_category", "")
+                category_index = category_options.index(selected_category) if selected_category in category_options else -1
+                
+                if not hiyari_location:
+                    errors.append("発生場所を入力してください")
+                if not hiyari_context:
+                    errors.append("どうしていた時を入力してください")
+                if not hiyari_details:
+                    errors.append("ヒヤリとした時のあらましを入力してください")
+                if not selected_causes:
+                    errors.append("原因チェックリストから1つ以上選択してください")
+                if category_index == -1:
+                    errors.append("分類を選択してください")
+                if not hiyari_countermeasure:
+                    errors.append("教訓・対策を入力してください")
+                
+                if errors:
+                    for error in errors:
+                        st.error(error)
+                else:
+                    try:
+                        # 日時情報の準備
+                        work_date = st.session_state.work_date
+                        incident_datetime = datetime.datetime.combine(
+                            work_date,
+                            datetime.time(hiyari_time_hour, hiyari_time_min)
+                        )
+                        
+                        # PDF生成用のデータを準備
+                        pdf_data = {
+                            "datetime": incident_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+                            "location": hiyari_location,
+                            "context": hiyari_context,
+                            "details": hiyari_details,
+                            "cause_indices": selected_causes,
+                            "category_index": category_index,
+                            "countermeasure": hiyari_countermeasure
+                        }
+                        
+                        # 一時ファイルにPDFを生成
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                            pdf_filename = tmp_file.name
+                            generator = HiyariHattoGenerator(pdf_filename)
+                            generator.generate_report(
+                                pdf_data,
+                                reporter_name=st.session_state.staff_name
+                            )
+                            
+                            # PDFファイルを読み込んでダウンロードボタンを表示
+                            with open(pdf_filename, "rb") as pdf_file:
+                                pdf_bytes = pdf_file.read()
+                                st.download_button(
+                                    label="📥 ヒヤリハット報告書PDFをダウンロード",
+                                    data=pdf_bytes,
+                                    file_name=f"ヒヤリハット報告書_{work_date.strftime('%Y%m%d')}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True
+                                )
+                            
+                            # 一時ファイルを削除
+                            os.unlink(pdf_filename)
+                            
+                            st.success("✅ ヒヤリハット報告書PDFを生成しました！")
+                            
+                    except Exception as e:
+                        st.error(f"PDF生成エラー: {str(e)}")
+                        st.exception(e)
+
+
+def render_user_master():
+    """利用者マスタ管理画面の描画"""
+    st.markdown('<div class="main-header">👥 利用者マスタ管理</div>', unsafe_allow_html=True)
+    
+    dm = st.session_state.data_manager
+    
+    # 新規追加
+    st.markdown('<div class="section-header">➕ 新規利用者追加</div>', unsafe_allow_html=True)
+    with st.form("add_user_form"):
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_user_name = st.text_input(
+                "利用者名",
+                key="new_user_name",
+                placeholder="児童の名前を入力してください"
+            )
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            add_submitted = st.form_submit_button("追加", use_container_width=True)
+        
+        if add_submitted:
+            if not new_user_name or not new_user_name.strip():
+                st.error("利用者名を入力してください")
+            else:
+                if dm.add_user(new_user_name):
+                    st.success(f"✅ {new_user_name} を追加しました！")
+                    st.rerun()
+                else:
+                    st.error("追加に失敗しました。既に登録されている可能性があります。")
+    
+    st.markdown("---")
+    
+    # 利用者一覧
+    st.markdown('<div class="section-header">📋 利用者一覧</div>', unsafe_allow_html=True)
+    
+    users = dm.get_all_users()
+    
+    if not users:
+        st.info("利用者が登録されていません。")
+    else:
+        # アクティブな利用者と無効化された利用者を分けて表示
+        active_users = [u for u in users if u.get("active", True)]
+        inactive_users = [u for u in users if not u.get("active", True)]
+        
+        if active_users:
+            st.markdown("#### アクティブな利用者")
+            df_active = pd.DataFrame([
+                {"ID": u["id"], "名前": u["name"], "登録日": u.get("created_at", "-")[:10]}
+                for u in active_users
+            ])
+            st.dataframe(df_active, use_container_width=True, hide_index=True)
+            
+            # 削除機能
+            with st.expander("🗑️ 利用者を削除（無効化）"):
+                users_to_delete = st.multiselect(
+                    "削除する利用者を選択",
+                    options=[u["name"] for u in active_users],
+                    key="users_to_delete"
+                )
+                
+                if st.button("選択した利用者を削除", type="secondary"):
+                    if users_to_delete:
+                        deleted_count = dm.delete_users(users_to_delete)
+                        if deleted_count > 0:
+                            st.success(f"✅ {deleted_count}名の利用者を削除しました")
+                            st.rerun()
+                    else:
+                        st.warning("削除する利用者を選択してください")
+        
+        if inactive_users:
+            st.markdown("#### 無効化された利用者")
+            df_inactive = pd.DataFrame([
+                {"ID": u["id"], "名前": u["name"], "削除日": u.get("deleted_at", "-")[:10]}
+                for u in inactive_users
+            ])
+            st.dataframe(df_inactive, use_container_width=True, hide_index=True)
+            
+            # 復元機能
+            with st.expander("♻️ 利用者を復元"):
+                users_to_restore = st.multiselect(
+                    "復元する利用者を選択",
+                    options=[u["name"] for u in inactive_users],
+                    key="users_to_restore"
+                )
+                
+                if st.button("選択した利用者を復元", type="secondary"):
+                    if users_to_restore:
+                        restored_count = 0
+                        for name in users_to_restore:
+                            if dm.restore_user(name):
+                                restored_count += 1
+                        if restored_count > 0:
+                            st.success(f"✅ {restored_count}名の利用者を復元しました")
+                            st.rerun()
+                    else:
+                        st.warning("復元する利用者を選択してください")
+
+
+def render_settings():
+    """設定画面の描画"""
+    st.markdown('<div class="main-header">⚙️ 設定</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="section-header">🔑 API設定</div>', unsafe_allow_html=True)
+    
+    # Grok APIキーの設定
+    st.markdown("#### Grok API キー設定")
+    st.info("AI文章生成機能を使用するには、Grok APIキーが必要です。")
+    
+    current_key = st.session_state.ai_helper.api_key or ""
+    masked_key = "***" + current_key[-4:] if len(current_key) > 4 else ""
+    
+    if current_key:
+        st.success(f"✅ APIキーが設定されています（末尾4桁: {masked_key}）")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("🗑️ APIキーを削除", type="secondary", use_container_width=True):
+                if st.session_state.data_manager.delete_api_key():
+                    st.session_state.ai_helper = AIHelper(api_key=None)
+                    st.success("✅ APIキーを削除しました")
+                    st.rerun()
+    else:
+        st.warning("⚠️ APIキーが設定されていません")
+    
+    new_api_key = st.text_input(
+        "新しいAPIキーを入力",
+        type="password",
+        key="new_api_key",
+        placeholder="APIキーを入力してください",
+        help="環境変数 GROK_API_KEY に設定することもできます"
+    )
+    
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("💾 APIキーを保存", use_container_width=True):
+            if new_api_key and new_api_key.strip():
+                if st.session_state.data_manager.save_api_key(new_api_key.strip()):
+                    st.session_state.ai_helper = AIHelper(api_key=new_api_key.strip())
+                    st.success("✅ APIキーを保存しました")
+                    st.rerun()
+                else:
+                    st.error("APIキーの保存に失敗しました")
+            else:
+                st.error("APIキーを入力してください")
+    
+    with col2:
+        if st.button("🔄 APIキーを更新（一時的）", use_container_width=True):
+            if new_api_key and new_api_key.strip():
+                st.session_state.ai_helper = AIHelper(api_key=new_api_key.strip())
+                st.success("✅ APIキーを更新しました（このセッションのみ有効）")
+                st.info("💡 永続的に保存するには「APIキーを保存」ボタンを使用してください")
+                st.rerun()
+            else:
+                st.error("APIキーを入力してください")
+    
+    st.markdown("---")
+    
+    # データエクスポート
+    st.markdown('<div class="section-header">📊 データ管理</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 日報データのエクスポート")
+        if st.button("CSV形式でダウンロード"):
+            df = st.session_state.data_manager.get_reports()
+            if not df.empty:
+                csv = df.to_csv(index=False, encoding='utf-8-sig')
+                st.download_button(
+                    label="📥 ダウンロード",
+                    data=csv,
+                    file_name=f"daily_reports_{date.today().isoformat()}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.warning("エクスポートするデータがありません")
+    
+    with col2:
+        st.markdown("#### データの確認")
+        if st.button("日報データを表示"):
+            df = st.session_state.data_manager.get_reports()
+            if not df.empty:
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("データがありません")
+
+
+def main():
+    """メイン関数"""
+    # サイドバーの描画（ウィジェットが自動的にセッション状態を更新）
+    render_sidebar()
+    
+    # セッション状態の初期化（初回のみ）
+    if 'work_date' not in st.session_state:
+        st.session_state.work_date = date.today()
+    if 'staff_name' not in st.session_state:
+        st.session_state.staff_name = ""
+    if 'start_time' not in st.session_state:
+        st.session_state.start_time = time(9, 0)
+    if 'end_time' not in st.session_state:
+        st.session_state.end_time = time(17, 0)
+    
+    # ページに応じたコンテンツを表示
+    if st.session_state.current_page == "日報入力":
+        render_daily_report_form()
+    elif st.session_state.current_page == "利用者マスタ管理":
+        render_user_master()
+    elif st.session_state.current_page == "設定":
+        render_settings()
+
+
+if __name__ == "__main__":
+    main()
+

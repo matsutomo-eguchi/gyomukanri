@@ -1,0 +1,6 @@
+# Grok API キー
+# AI文章生成機能を使用する場合に設定してください
+# このファイルを .env にリネームして使用するか、
+# 環境変数 GROK_API_KEY に設定してください
+GROK_API_KEY=your_api_key_here
+
