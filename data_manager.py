@@ -29,6 +29,8 @@ class DataManager:
         self.tags_file = self.data_dir / "tags_master.json"
         self.config_file = self.data_dir / "config.json"
         self.staff_accounts_file = self.data_dir / "staff_accounts.json"
+        self.reports_dir = self.data_dir / "reports"
+        self.reports_dir.mkdir(exist_ok=True)
         
         # 利用者マスタの初期化
         self._init_master_file()
@@ -144,7 +146,7 @@ class DataManager:
     
     def save_daily_report(self, report_data: Dict) -> bool:
         """
-        日報データを保存
+        日報データを保存（CSVとMarkdown形式の両方）
         
         Args:
             report_data: 日報データの辞書
@@ -166,12 +168,260 @@ class DataManager:
             new_row = pd.DataFrame([report_data])
             df = pd.concat([df, new_row], ignore_index=True)
             
-            # 保存
+            # CSV形式で保存
             df.to_csv(self.report_file, index=False, encoding='utf-8')
+            
+            # Markdown形式でも保存（担当利用者名または送迎区分がある場合）
+            if ("担当利用者名" in report_data and report_data["担当利用者名"]) or \
+               ("送迎区分" in report_data and report_data["送迎区分"]):
+                self._save_report_as_markdown(report_data)
+            
             return True
         except Exception as e:
             print(f"日報保存エラー: {e}")
             return False
+    
+    def _save_report_as_markdown(self, report_data: Dict) -> bool:
+        """
+        日報データをMarkdown形式で保存
+        
+        Args:
+            report_data: 日報データの辞書
+            
+        Returns:
+            成功した場合True
+        """
+        try:
+            # ファイル名を生成（業務日_担当利用者名または送迎区分.md）
+            work_date = report_data.get("業務日", datetime.now().date().isoformat())
+            if "担当利用者名" in report_data and report_data["担当利用者名"]:
+                name_part = report_data["担当利用者名"]
+            elif "送迎区分" in report_data and report_data["送迎区分"]:
+                name_part = report_data["送迎区分"]
+            else:
+                name_part = "不明"
+            # ファイル名に使用できない文字を置換
+            safe_name = name_part.replace("/", "_").replace("\\", "_").replace(":", "_")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{work_date}_{safe_name}_{timestamp}.md"
+            filepath = self.reports_dir / filename
+            
+            # Markdown形式で内容を生成
+            md_content = self._format_report_as_markdown(report_data)
+            
+            # ファイルに保存
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(md_content)
+            
+            return True
+        except Exception as e:
+            print(f"Markdown保存エラー: {e}")
+            return False
+    
+    def _format_report_as_markdown(self, report_data: Dict) -> str:
+        """
+        日報データをMarkdown形式の文字列に変換
+        
+        Args:
+            report_data: 日報データの辞書
+            
+        Returns:
+            Markdown形式の文字列
+        """
+        lines = []
+        lines.append("# 日報")
+        lines.append("")
+        
+        # 基本情報
+        lines.append("## 基本情報")
+        lines.append("")
+        if "業務日" in report_data:
+            lines.append(f"- **業務日**: {report_data['業務日']}")
+        if "記入スタッフ名" in report_data:
+            lines.append(f"- **記入スタッフ名**: {report_data['記入スタッフ名']}")
+        if "始業時間" in report_data:
+            lines.append(f"- **始業時間**: {report_data['始業時間']}")
+        if "終業時間" in report_data:
+            lines.append(f"- **終業時間**: {report_data['終業時間']}")
+        if "担当利用者名" in report_data:
+            lines.append(f"- **担当利用者名**: {report_data['担当利用者名']}")
+        if "created_at" in report_data:
+            created_at = report_data['created_at']
+            if isinstance(created_at, str):
+                try:
+                    dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    lines.append(f"- **作成日時**: {dt.strftime('%Y年%m月%d日 %H:%M:%S')}")
+                except:
+                    lines.append(f"- **作成日時**: {created_at}")
+        lines.append("")
+        
+        # バイタル情報
+        if any(key in report_data for key in ["体温", "バイタルその他", "気分顔色"]):
+            lines.append("## バイタル")
+            lines.append("")
+            if "体温" in report_data:
+                lines.append(f"- **体温**: {report_data['体温']}℃")
+            if "バイタルその他" in report_data and report_data["バイタルその他"]:
+                lines.append(f"- **その他**: {report_data['バイタルその他']}")
+            if "気分顔色" in report_data:
+                lines.append(f"- **気分・顔色**: {report_data['気分顔色']}")
+            lines.append("")
+        
+        # 食事・健康情報
+        if any(key in report_data for key in ["食事状態", "食事詳細", "水分補給量", "排泄記録"]):
+            lines.append("## 食事・健康")
+            lines.append("")
+            if "食事状態" in report_data:
+                lines.append(f"- **食事・おやつ**: {report_data['食事状態']}")
+            if "食事詳細" in report_data and report_data["食事詳細"]:
+                lines.append(f"- **メニュー内容**: {report_data['食事詳細']}")
+            if "水分補給量" in report_data and report_data.get("水分補給量", 0) > 0:
+                lines.append(f"- **水分補給量**: {report_data['水分補給量']}ml")
+            if "排泄記録" in report_data and report_data["排泄記録"]:
+                lines.append(f"- **排泄記録**: {report_data['排泄記録']}")
+            lines.append("")
+        
+        # 活動内容
+        if any(key in report_data for key in ["学習内容タグ", "学習内容詳細", "自由遊びタグ", "自由遊び詳細", "集団遊びタグ", "集団遊び詳細"]):
+            lines.append("## 活動内容")
+            lines.append("")
+            
+            if "学習内容タグ" in report_data and report_data["学習内容タグ"]:
+                lines.append(f"- **学習内容**: {report_data['学習内容タグ']}")
+            if "学習内容詳細" in report_data and report_data["学習内容詳細"]:
+                lines.append(f"  {report_data['学習内容詳細']}")
+                lines.append("")
+            
+            if "自由遊びタグ" in report_data and report_data["自由遊びタグ"]:
+                lines.append(f"- **自由遊び**: {report_data['自由遊びタグ']}")
+            if "自由遊び詳細" in report_data and report_data["自由遊び詳細"]:
+                lines.append(f"  {report_data['自由遊び詳細']}")
+                lines.append("")
+            
+            if "集団遊びタグ" in report_data and report_data["集団遊びタグ"]:
+                lines.append(f"- **集団遊び**: {report_data['集団遊びタグ']}")
+            if "集団遊び詳細" in report_data and report_data["集団遊び詳細"]:
+                lines.append(f"  {report_data['集団遊び詳細']}")
+                lines.append("")
+        
+        # 特記事項
+        if "特記事項" in report_data and report_data["特記事項"]:
+            lines.append("## 特記事項")
+            lines.append("")
+            lines.append(report_data["特記事項"])
+            lines.append("")
+        
+        # 送迎業務記録
+        if "送迎区分" in report_data:
+            lines.append("## 送迎業務記録")
+            lines.append("")
+            if "送迎区分" in report_data:
+                lines.append(f"- **送迎区分**: {report_data['送迎区分']}")
+            if "使用車両" in report_data and report_data["使用車両"]:
+                lines.append(f"- **使用車両**: {report_data['使用車両']}")
+            if "送迎児童名" in report_data and report_data["送迎児童名"]:
+                lines.append(f"- **送迎児童名**: {report_data['送迎児童名']}")
+            if "送迎人数" in report_data:
+                lines.append(f"- **送迎人数**: {report_data['送迎人数']}名")
+            if "到着時刻" in report_data and report_data["到着時刻"]:
+                lines.append(f"- **到着時刻**: {report_data['到着時刻']}")
+            if "退所時間" in report_data and report_data["退所時間"]:
+                lines.append(f"- **退所時間**: {report_data['退所時間']}")
+            lines.append("")
+        
+        # 業務報告・共有事項
+        if any(key in report_data for key in ["ヒヤリハット事故", "ヒヤリハット詳細", "発生場所", "対象者", "事故発生の状況", "経過", "事故原因", "対策", "その他", "申し送り事項", "備品購入要望"]):
+            lines.append("## 業務報告・共有事項")
+            lines.append("")
+            
+            if "ヒヤリハット事故" in report_data:
+                lines.append(f"- **ヒヤリハット・事故**: {report_data['ヒヤリハット事故']}")
+            
+            if "発生場所" in report_data and report_data["発生場所"]:
+                lines.append(f"- **発生場所**: {report_data['発生場所']}")
+            if "対象者" in report_data and report_data["対象者"]:
+                lines.append(f"- **対象者**: {report_data['対象者']}")
+            if "事故発生の状況" in report_data and report_data["事故発生の状況"]:
+                lines.append("### 事故発生の状況")
+                lines.append(report_data["事故発生の状況"])
+                lines.append("")
+            if "経過" in report_data and report_data["経過"]:
+                lines.append("### 経過")
+                lines.append(report_data["経過"])
+                lines.append("")
+            if "事故原因" in report_data and report_data["事故原因"]:
+                lines.append("### 事故原因")
+                lines.append(report_data["事故原因"])
+                lines.append("")
+            if "対策" in report_data and report_data["対策"]:
+                lines.append("### 対策")
+                lines.append(report_data["対策"])
+                lines.append("")
+            if "その他" in report_data and report_data["その他"]:
+                lines.append("### その他")
+                lines.append(report_data["その他"])
+                lines.append("")
+            if "ヒヤリハット詳細" in report_data and report_data["ヒヤリハット詳細"]:
+                lines.append("### ヒヤリハット詳細")
+                lines.append(report_data["ヒヤリハット詳細"])
+                lines.append("")
+            
+            if "申し送り事項" in report_data and report_data["申し送り事項"]:
+                lines.append("### 申し送り事項")
+                lines.append(report_data["申し送り事項"])
+                lines.append("")
+            if "備品購入要望" in report_data and report_data["備品購入要望"]:
+                lines.append("### 備品購入・要望")
+                lines.append(report_data["備品購入要望"])
+                lines.append("")
+        
+        return "\n".join(lines)
+    
+    def get_saved_reports(self) -> List[Dict]:
+        """
+        保存済みのMarkdown形式の日報ファイル一覧を取得
+        
+        Returns:
+            日報ファイル情報のリスト（ファイル名、パス、作成日時など）
+        """
+        reports = []
+        if not self.reports_dir.exists():
+            return reports
+        
+        for filepath in sorted(self.reports_dir.glob("*.md"), reverse=True):
+            try:
+                stat = filepath.stat()
+                reports.append({
+                    "filename": filepath.name,
+                    "filepath": str(filepath),
+                    "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "size": stat.st_size
+                })
+            except Exception as e:
+                print(f"ファイル情報取得エラー ({filepath}): {e}")
+        
+        return reports
+    
+    def load_report_markdown(self, filename: str) -> Optional[str]:
+        """
+        指定されたMarkdownファイルの内容を読み込む
+        
+        Args:
+            filename: ファイル名
+            
+        Returns:
+            Markdownファイルの内容（存在しない場合はNone）
+        """
+        filepath = self.reports_dir / filename
+        if not filepath.exists():
+            return None
+        
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            print(f"Markdown読み込みエラー ({filepath}): {e}")
+            return None
     
     def get_reports(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> pd.DataFrame:
         """

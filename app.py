@@ -251,7 +251,7 @@ def render_sidebar():
         # ページ選択
         page = st.radio(
             "メニュー",
-            ["日報入力", "利用者マスタ管理", "設定"],
+            ["日報入力", "保存済み日報閲覧", "利用者マスタ管理", "設定"],
             key="page_selector"
         )
         st.session_state.current_page = page
@@ -1431,6 +1431,108 @@ def render_user_master():
                         st.warning("復元する利用者を選択してください")
 
 
+def render_saved_reports_viewer():
+    """保存済み日報閲覧画面の描画"""
+    st.markdown('<div class="main-header">📚 保存済み日報閲覧</div>', unsafe_allow_html=True)
+    
+    dm = st.session_state.data_manager
+    
+    # 保存済み日報の一覧を取得
+    saved_reports = dm.get_saved_reports()
+    
+    if not saved_reports:
+        st.info("保存済みの日報がありません。")
+        return
+    
+    st.markdown('<div class="section-header">📋 保存済み日報一覧</div>', unsafe_allow_html=True)
+    
+    # 日付でフィルタリング
+    col1, col2 = st.columns(2)
+    with col1:
+        filter_start_date = st.date_input(
+            "開始日",
+            value=None,
+            key="filter_start_date"
+        )
+    with col2:
+        filter_end_date = st.date_input(
+            "終了日",
+            value=None,
+            key="filter_end_date"
+        )
+    
+    # フィルタリング処理
+    filtered_reports = saved_reports
+    if filter_start_date:
+        filtered_reports = [
+            r for r in filtered_reports
+            if datetime.fromisoformat(r["created_at"]).date() >= filter_start_date
+        ]
+    if filter_end_date:
+        filtered_reports = [
+            r for r in filtered_reports
+            if datetime.fromisoformat(r["created_at"]).date() <= filter_end_date
+        ]
+    
+    if not filtered_reports:
+        st.warning("該当する日報がありません。")
+        return
+    
+    # 日報一覧を表示
+    st.markdown(f"**{len(filtered_reports)}件の日報が見つかりました**")
+    
+    # 日報を選択
+    report_options = {}
+    for report in filtered_reports:
+        # ファイル名から日付と利用者名を抽出
+        filename = report["filename"]
+        created_at = datetime.fromisoformat(report["created_at"])
+        display_name = f"{created_at.strftime('%Y年%m月%d日 %H:%M')} - {filename}"
+        report_options[display_name] = report
+    
+    selected_display = st.selectbox(
+        "閲覧する日報を選択してください",
+        options=list(report_options.keys()),
+        key="selected_report"
+    )
+    
+    if selected_display:
+        selected_report = report_options[selected_display]
+        
+        st.markdown("---")
+        st.markdown('<div class="section-header">📄 日報内容</div>', unsafe_allow_html=True)
+        
+        # Markdownファイルの内容を読み込んで表示
+        md_content = dm.load_report_markdown(selected_report["filename"])
+        
+        if md_content:
+            # Markdown形式で表示
+            st.markdown(md_content)
+            
+            # ダウンロードボタン
+            st.markdown("---")
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.download_button(
+                    label="📥 Markdownファイルをダウンロード",
+                    data=md_content,
+                    file_name=selected_report["filename"],
+                    mime="text/markdown",
+                    use_container_width=True
+                )
+            with col2:
+                if st.button("🗑️ この日報を削除", use_container_width=True, type="secondary"):
+                    try:
+                        import os
+                        os.remove(selected_report["filepath"])
+                        st.success("✅ 日報を削除しました")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"削除エラー: {str(e)}")
+        else:
+            st.error("日報ファイルの読み込みに失敗しました。")
+
+
 def render_settings():
     """設定画面の描画"""
     st.markdown('<div class="main-header">⚙️ 設定</div>', unsafe_allow_html=True)
@@ -1617,6 +1719,8 @@ def main():
     # ページに応じたコンテンツを表示
     if st.session_state.current_page == "日報入力":
         render_daily_report_form()
+    elif st.session_state.current_page == "保存済み日報閲覧":
+        render_saved_reports_viewer()
     elif st.session_state.current_page == "利用者マスタ管理":
         render_user_master()
     elif st.session_state.current_page == "設定":
