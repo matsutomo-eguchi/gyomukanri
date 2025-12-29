@@ -1,7 +1,7 @@
 """
 AI文章生成アシストモジュール
 grok-4-1-fast-reasoningを使用した文章生成機能
-Gemini 3.0 Proを使用した音声認識と議事録生成機能
+Gemini 3 Flash Previewを使用した音声認識と議事録生成機能
 """
 import os
 from typing import Optional, Dict, Tuple
@@ -144,7 +144,7 @@ class AIHelper:
     
     def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
         """
-        音声ファイルをテキストに変換（Gemini 2.0 Flash Exp使用）
+        音声ファイルをテキストに変換（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
@@ -175,8 +175,8 @@ class AIHelper:
             }
             mime_type = mime_types.get(file_ext, 'audio/mpeg')
             
-            # Gemini 2.0 Flash Expを使用して音声をテキストに変換
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Gemini 3 Flash Previewを使用して音声をテキストに変換
+            model = genai.GenerativeModel('gemini-3-flash-preview')
             
             # 音声ファイルをアップロード
             audio_file_obj = genai.upload_file(
@@ -205,7 +205,7 @@ class AIHelper:
     
     def generate_meeting_minutes_from_audio(self, audio_file_path: str) -> Tuple[bool, Dict[str, str]]:
         """
-        音声ファイルから朝礼議事録を生成（Gemini 2.0 Flash Exp使用）
+        音声ファイルから朝礼議事録を生成（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
@@ -233,7 +233,7 @@ class AIHelper:
     
     def generate_meeting_minutes_from_text(self, text: str) -> Tuple[bool, Dict[str, str]]:
         """
-        テキストから朝礼議事録を構造化して生成（Gemini 2.0 Flash Exp使用）
+        テキストから朝礼議事録を構造化して生成（Gemini 3 Flash Preview使用）
         
         Args:
             text: 議事録の元となるテキスト
@@ -252,8 +252,8 @@ class AIHelper:
             return False, "Gemini APIキーの設定に失敗しました。設定画面でAPIキーを確認してください。"
         
         try:
-            # Gemini 2.0 Flash Expを使用して議事録を構造化
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Gemini 3 Flash Previewを使用して議事録を構造化
+            model = genai.GenerativeModel('gemini-3-flash-preview')
             
             prompt = f"""以下の朝礼の音声を書き起こしたテキストから、朝礼議事録を作成してください。
 
@@ -501,7 +501,7 @@ class AIHelper:
     
     def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
         """
-        音声ファイルをテキストに変換（Gemini 2.0 Flash Exp使用）
+        音声ファイルをテキストに変換（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
@@ -532,8 +532,8 @@ class AIHelper:
             }
             mime_type = mime_types.get(file_ext, 'audio/mpeg')
             
-            # Gemini 2.0 Flash Expを使用して音声をテキストに変換
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Gemini 3 Flash Previewを使用して音声をテキストに変換
+            model = genai.GenerativeModel('gemini-3-flash-preview')
             
             # 音声ファイルをアップロード
             audio_file_obj = genai.upload_file(
@@ -562,7 +562,7 @@ class AIHelper:
     
     def generate_meeting_minutes_from_audio(self, audio_file_path: str) -> Tuple[bool, Dict[str, str]]:
         """
-        音声ファイルから朝礼議事録を生成（Gemini 2.0 Flash Exp使用）
+        音声ファイルから朝礼議事録を生成（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
@@ -590,7 +590,7 @@ class AIHelper:
     
     def generate_meeting_minutes_from_text(self, text: str) -> Tuple[bool, Dict[str, str]]:
         """
-        テキストから朝礼議事録を構造化して生成（Gemini 2.0 Flash Exp使用）
+        テキストから朝礼議事録を構造化して生成（Gemini 3 Flash Preview使用）
         
         Args:
             text: 議事録の元となるテキスト
@@ -609,8 +609,8 @@ class AIHelper:
             return False, "Gemini APIキーの設定に失敗しました。設定画面でAPIキーを確認してください。"
         
         try:
-            # Gemini 2.0 Flash Expを使用して議事録を構造化
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Gemini 3 Flash Previewを使用して議事録を構造化
+            model = genai.GenerativeModel('gemini-3-flash-preview')
             
             prompt = f"""以下の朝礼の音声を書き起こしたテキストから、朝礼議事録を作成してください。
 
@@ -793,7 +793,7 @@ class AIHelper:
     
     def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
         """
-        音声ファイルをテキストに変換（Gemini 2.0 Flash Exp使用）
+        音声ファイルをテキストに変換（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
@@ -824,8 +824,8 @@ class AIHelper:
             }
             mime_type = mime_types.get(file_ext, 'audio/mpeg')
             
-            # Gemini 2.0 Flash Expを使用して音声をテキストに変換
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Gemini 3 Flash Previewを使用して音声をテキストに変換
+            model = genai.GenerativeModel('gemini-3-flash-preview')
             
             # 音声ファイルをアップロード
             audio_file_obj = genai.upload_file(
@@ -854,7 +854,7 @@ class AIHelper:
     
     def generate_meeting_minutes_from_audio(self, audio_file_path: str) -> Tuple[bool, Dict[str, str]]:
         """
-        音声ファイルから朝礼議事録を生成（Gemini 2.0 Flash Exp使用）
+        音声ファイルから朝礼議事録を生成（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
@@ -882,7 +882,7 @@ class AIHelper:
     
     def generate_meeting_minutes_from_text(self, text: str) -> Tuple[bool, Dict[str, str]]:
         """
-        テキストから朝礼議事録を構造化して生成（Gemini 2.0 Flash Exp使用）
+        テキストから朝礼議事録を構造化して生成（Gemini 3 Flash Preview使用）
         
         Args:
             text: 議事録の元となるテキスト
@@ -901,8 +901,8 @@ class AIHelper:
             return False, "Gemini APIキーの設定に失敗しました。設定画面でAPIキーを確認してください。"
         
         try:
-            # Gemini 2.0 Flash Expを使用して議事録を構造化
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Gemini 3 Flash Previewを使用して議事録を構造化
+            model = genai.GenerativeModel('gemini-3-flash-preview')
             
             prompt = f"""以下の朝礼の音声を書き起こしたテキストから、朝礼議事録を作成してください。
 
