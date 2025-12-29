@@ -4,6 +4,7 @@
 """
 import json
 import os
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
@@ -27,11 +28,14 @@ class DataManager:
         self.report_file = self.data_dir / "daily_reports.csv"
         self.tags_file = self.data_dir / "tags_master.json"
         self.config_file = self.data_dir / "config.json"
+        self.staff_accounts_file = self.data_dir / "staff_accounts.json"
         
         # 利用者マスタの初期化
         self._init_master_file()
         # タグマスタの初期化
         self._init_tags_file()
+        # スタッフアカウントの初期化
+        self._init_staff_accounts_file()
     
     def _init_master_file(self):
         """利用者マスタファイルが存在しない場合、初期化"""
@@ -348,4 +352,149 @@ class DataManager:
         except Exception as e:
             print(f"APIキー削除エラー: {e}")
             return False
+    
+    def _init_staff_accounts_file(self):
+        """スタッフアカウントファイルが存在しない場合、初期化"""
+        if not self.staff_accounts_file.exists():
+            default_accounts = []
+            self._save_staff_accounts(default_accounts)
+    
+    def _load_staff_accounts(self) -> List[Dict]:
+        """スタッフアカウントを読み込む"""
+        try:
+            with open(self.staff_accounts_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return []
+    
+    def _save_staff_accounts(self, accounts: List[Dict]):
+        """スタッフアカウントを保存する"""
+        with open(self.staff_accounts_file, 'w', encoding='utf-8') as f:
+            json.dump(accounts, f, ensure_ascii=False, indent=2)
+    
+    def _hash_password(self, password: str) -> str:
+        """パスワードをハッシュ化"""
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
+    
+    def create_staff_account(self, user_id: str, password: str, name: str) -> bool:
+        """
+        新しいスタッフアカウントを作成
+        
+        Args:
+            user_id: ユーザーID
+            password: パスワード（平文）
+            name: スタッフ名
+            
+        Returns:
+            成功した場合True
+        """
+        if not user_id or not password or not name:
+            return False
+        
+        accounts = self._load_staff_accounts()
+        
+        # 重複チェック
+        if any(acc["user_id"] == user_id for acc in accounts):
+            return False
+        
+        # 新しいアカウントを作成
+        new_account = {
+            "user_id": user_id,
+            "password_hash": self._hash_password(password),
+            "name": name,
+            "created_at": datetime.now().isoformat(),
+            "active": True
+        }
+        
+        accounts.append(new_account)
+        self._save_staff_accounts(accounts)
+        return True
+    
+    def verify_login(self, user_id: str, password: str) -> Optional[Dict]:
+        """
+        ログイン認証
+        
+        Args:
+            user_id: ユーザーID
+            password: パスワード（平文）
+            
+        Returns:
+            認証成功時はアカウント情報の辞書、失敗時はNone
+        """
+        accounts = self._load_staff_accounts()
+        
+        password_hash = self._hash_password(password)
+        
+        for account in accounts:
+            if (account["user_id"] == user_id and 
+                account["password_hash"] == password_hash and 
+                account.get("active", True)):
+                # パスワードハッシュを返さない
+                return {
+                    "user_id": account["user_id"],
+                    "name": account["name"],
+                    "created_at": account.get("created_at", "")
+                }
+        
+        return None
+    
+    def get_all_staff_accounts(self) -> List[Dict]:
+        """全スタッフアカウント情報を取得（パスワードハッシュは除外）"""
+        accounts = self._load_staff_accounts()
+        return [
+            {
+                "user_id": acc["user_id"],
+                "name": acc["name"],
+                "created_at": acc.get("created_at", ""),
+                "active": acc.get("active", True)
+            }
+            for acc in accounts
+        ]
+    
+    def delete_staff_account(self, user_id: str) -> bool:
+        """
+        スタッフアカウントを削除（無効化）
+        
+        Args:
+            user_id: 削除するユーザーID
+            
+        Returns:
+            成功した場合True
+        """
+        accounts = self._load_staff_accounts()
+        
+        for account in accounts:
+            if account["user_id"] == user_id:
+                account["active"] = False
+                account["deleted_at"] = datetime.now().isoformat()
+                self._save_staff_accounts(accounts)
+                return True
+        
+        return False
+    
+    def change_password(self, user_id: str, old_password: str, new_password: str) -> bool:
+        """
+        パスワードを変更
+        
+        Args:
+            user_id: ユーザーID
+            old_password: 現在のパスワード（平文）
+            new_password: 新しいパスワード（平文）
+            
+        Returns:
+            成功した場合True
+        """
+        accounts = self._load_staff_accounts()
+        
+        old_password_hash = self._hash_password(old_password)
+        
+        for account in accounts:
+            if (account["user_id"] == user_id and 
+                account["password_hash"] == old_password_hash):
+                account["password_hash"] = self._hash_password(new_password)
+                account["password_changed_at"] = datetime.now().isoformat()
+                self._save_staff_accounts(accounts)
+                return True
+        
+        return False
 

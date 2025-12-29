@@ -84,6 +84,12 @@ if 'ai_helper' not in st.session_state:
 if 'current_page' not in st.session_state:
     st.session_state.current_page = "日報入力"
 
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+
+if 'logged_in_user' not in st.session_state:
+    st.session_state.logged_in_user = None
+
 # 定型タグの定義（初期値、データマネージャーから動的に取得される）
 LEARNING_TAGS_DEFAULT = [
     "プリント学習", "宿題", "SST（ソーシャルスキルトレーニング）", 
@@ -121,10 +127,125 @@ def generate_time_options():
     return times
 
 
+def render_login_page():
+    """ログインページの描画"""
+    st.markdown('<div class="main-header">🔐 ログイン</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("---")
+        
+        with st.form("login_form"):
+            st.markdown("#### スタッフログイン")
+            
+            user_id = st.text_input(
+                "ユーザーID",
+                key="login_user_id",
+                placeholder="ユーザーIDを入力してください"
+            )
+            
+            password = st.text_input(
+                "パスワード",
+                type="password",
+                key="login_password",
+                placeholder="パスワードを入力してください"
+            )
+            
+            login_submitted = st.form_submit_button("ログイン", use_container_width=True, type="primary")
+            
+            if login_submitted:
+                if not user_id or not password:
+                    st.error("ユーザーIDとパスワードを入力してください")
+                else:
+                    account = st.session_state.data_manager.verify_login(user_id, password)
+                    if account:
+                        st.session_state.logged_in = True
+                        st.session_state.logged_in_user = account
+                        st.session_state.staff_name = account["name"]
+                        st.success(f"✅ {account['name']}さん、ようこそ！")
+                        st.rerun()
+                    else:
+                        st.error("ユーザーIDまたはパスワードが正しくありません")
+        
+        st.markdown("---")
+        
+        # アカウント作成セクション
+        with st.expander("📝 新規アカウント作成", expanded=False):
+            with st.form("create_account_form"):
+                st.markdown("#### 新規スタッフアカウント作成")
+                
+                new_user_id = st.text_input(
+                    "ユーザーID",
+                    key="new_user_id",
+                    placeholder="英数字で入力してください",
+                    help="ログイン時に使用するIDです"
+                )
+                
+                new_password = st.text_input(
+                    "パスワード",
+                    type="password",
+                    key="new_password",
+                    placeholder="パスワードを入力してください"
+                )
+                
+                new_password_confirm = st.text_input(
+                    "パスワード（確認）",
+                    type="password",
+                    key="new_password_confirm",
+                    placeholder="パスワードを再度入力してください"
+                )
+                
+                new_staff_name = st.text_input(
+                    "スタッフ名",
+                    key="new_staff_name",
+                    placeholder="表示名を入力してください"
+                )
+                
+                create_submitted = st.form_submit_button("アカウント作成", use_container_width=True)
+                
+                if create_submitted:
+                    errors = []
+                    if not new_user_id or not new_user_id.strip():
+                        errors.append("ユーザーIDを入力してください")
+                    if not new_password:
+                        errors.append("パスワードを入力してください")
+                    elif len(new_password) < 4:
+                        errors.append("パスワードは4文字以上にしてください")
+                    elif new_password != new_password_confirm:
+                        errors.append("パスワードが一致しません")
+                    if not new_staff_name or not new_staff_name.strip():
+                        errors.append("スタッフ名を入力してください")
+                    
+                    if errors:
+                        for error in errors:
+                            st.error(error)
+                    else:
+                        if st.session_state.data_manager.create_staff_account(
+                            new_user_id.strip(),
+                            new_password,
+                            new_staff_name.strip()
+                        ):
+                            st.success(f"✅ アカウント '{new_user_id}' を作成しました！ログインしてください。")
+                            st.rerun()
+                        else:
+                            st.error("アカウント作成に失敗しました。ユーザーIDが既に使用されている可能性があります。")
+
+
 def render_sidebar():
     """サイドバーの描画"""
     with st.sidebar:
         st.title("📋 業務管理フォーム")
+        
+        # ログイン情報表示
+        if st.session_state.logged_in and st.session_state.logged_in_user:
+            st.info(f"👤 {st.session_state.logged_in_user['name']} ({st.session_state.logged_in_user['user_id']})")
+            if st.button("🚪 ログアウト", use_container_width=True, type="secondary"):
+                st.session_state.logged_in = False
+                st.session_state.logged_in_user = None
+                st.session_state.staff_name = ""
+                st.rerun()
+        
         st.markdown("---")
         
         # ページ選択
@@ -145,11 +266,20 @@ def render_sidebar():
             key="work_date"
         )
         
-        staff_name = st.text_input(
-            "記入スタッフ名",
-            value=st.session_state.get("staff_name", ""),
-            key="staff_name"
-        )
+        # ログイン済みの場合はスタッフ名を自動設定
+        if st.session_state.logged_in and st.session_state.logged_in_user:
+            staff_name = st.text_input(
+                "記入スタッフ名",
+                value=st.session_state.logged_in_user["name"],
+                key="staff_name",
+                disabled=True
+            )
+        else:
+            staff_name = st.text_input(
+                "記入スタッフ名",
+                value=st.session_state.get("staff_name", ""),
+                key="staff_name"
+            )
         
         st.markdown("---")
         
@@ -1305,6 +1435,79 @@ def render_settings():
     """設定画面の描画"""
     st.markdown('<div class="main-header">⚙️ 設定</div>', unsafe_allow_html=True)
     
+    # アカウント管理セクション
+    if st.session_state.logged_in and st.session_state.logged_in_user:
+        st.markdown('<div class="section-header">👤 アカウント管理</div>', unsafe_allow_html=True)
+        
+        st.markdown("#### パスワード変更")
+        with st.form("change_password_form"):
+            old_password = st.text_input(
+                "現在のパスワード",
+                type="password",
+                key="old_password"
+            )
+            
+            new_password = st.text_input(
+                "新しいパスワード",
+                type="password",
+                key="new_password",
+                help="4文字以上にしてください"
+            )
+            
+            new_password_confirm = st.text_input(
+                "新しいパスワード（確認）",
+                type="password",
+                key="new_password_confirm"
+            )
+            
+            change_submitted = st.form_submit_button("パスワードを変更", use_container_width=True)
+            
+            if change_submitted:
+                errors = []
+                if not old_password:
+                    errors.append("現在のパスワードを入力してください")
+                if not new_password:
+                    errors.append("新しいパスワードを入力してください")
+                elif len(new_password) < 4:
+                    errors.append("パスワードは4文字以上にしてください")
+                elif new_password != new_password_confirm:
+                    errors.append("新しいパスワードが一致しません")
+                
+                if errors:
+                    for error in errors:
+                        st.error(error)
+                else:
+                    if st.session_state.data_manager.change_password(
+                        st.session_state.logged_in_user["user_id"],
+                        old_password,
+                        new_password
+                    ):
+                        st.success("✅ パスワードを変更しました")
+                        st.rerun()
+                    else:
+                        st.error("パスワードの変更に失敗しました。現在のパスワードが正しくない可能性があります。")
+        
+        st.markdown("---")
+        
+        # スタッフアカウント一覧（管理者向け）
+        st.markdown("#### スタッフアカウント一覧")
+        accounts = st.session_state.data_manager.get_all_staff_accounts()
+        if accounts:
+            df_accounts = pd.DataFrame([
+                {
+                    "ユーザーID": acc["user_id"],
+                    "スタッフ名": acc["name"],
+                    "登録日": acc.get("created_at", "-")[:10] if acc.get("created_at") else "-",
+                    "状態": "アクティブ" if acc.get("active", True) else "無効"
+                }
+                for acc in accounts
+            ])
+            st.dataframe(df_accounts, use_container_width=True, hide_index=True)
+        else:
+            st.info("アカウントが登録されていません。")
+        
+        st.markdown("---")
+    
     st.markdown('<div class="section-header">🔑 API設定</div>', unsafe_allow_html=True)
     
     # Grok APIキーの設定
@@ -1391,9 +1594,6 @@ def render_settings():
 
 def main():
     """メイン関数"""
-    # サイドバーの描画（ウィジェットが自動的にセッション状態を更新）
-    render_sidebar()
-    
     # セッション状態の初期化（初回のみ）
     if 'work_date' not in st.session_state:
         st.session_state.work_date = date.today()
@@ -1403,6 +1603,16 @@ def main():
         st.session_state.start_time = time(9, 0)
     if 'end_time' not in st.session_state:
         st.session_state.end_time = time(17, 0)
+    
+    # ログイン状態をチェック
+    if not st.session_state.logged_in:
+        # ログインしていない場合はログインページを表示
+        render_login_page()
+        return
+    
+    # ログイン済みの場合は通常のアプリケーションを表示
+    # サイドバーの描画（ウィジェットが自動的にセッション状態を更新）
+    render_sidebar()
     
     # ページに応じたコンテンツを表示
     if st.session_state.current_page == "日報入力":
