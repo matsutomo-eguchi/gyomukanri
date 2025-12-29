@@ -1614,6 +1614,11 @@ def render_morning_meeting():
         
         dm = st.session_state.data_manager
         
+        # メソッドの存在確認
+        if not hasattr(dm, 'get_morning_meetings'):
+            st.error("エラー: get_morning_meetings メソッドが見つかりません。DataManagerクラスを確認してください。")
+            st.stop()
+        
         # 日付でフィルタリング
         col1, col2 = st.columns(2)
         with col1:
@@ -1632,7 +1637,16 @@ def render_morning_meeting():
         # フィルタリング処理
         start_date_str = filter_start_date.isoformat() if filter_start_date else None
         end_date_str = filter_end_date.isoformat() if filter_end_date else None
-        meetings = dm.get_morning_meetings(start_date_str, end_date_str)
+        
+        try:
+            meetings = dm.get_morning_meetings(start_date_str, end_date_str)
+        except AttributeError as e:
+            st.error(f"エラー: get_morning_meetings メソッドの呼び出しに失敗しました: {str(e)}")
+            st.info("DataManagerクラスにget_morning_meetingsメソッドが存在するか確認してください。")
+            st.stop()
+        except Exception as e:
+            st.error(f"エラー: 朝礼議事録の取得に失敗しました: {str(e)}")
+            st.stop()
         
         if not meetings:
             st.info("朝礼議事録が登録されていません。")
