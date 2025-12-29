@@ -1,29 +1,17 @@
 # Streamlit設定ファイル
-# M3 MacBook Pro (Apple Silicon) 最適化設定
+# Streamlit Cloud用の設定
 
 [server]
-# パフォーマンス最適化
-headless = false
-port = 8501
-address = "0.0.0.0"  # すべてのインターフェースでリッスン
+# セキュリティ設定
 enableCORS = true
 enableXsrfProtection = true
-
-# ファイル監視設定（FSEventsの問題を回避）
-fileWatcherType = "poll"
-runOnSave = true
 
 # メモリとパフォーマンス設定
 maxUploadSize = 200
 maxMessageSize = 200
 
-[browser]
-# ブラウザ自動起動設定
-gatherUsageStats = false
-serverAddress = "localhost"
-
 [theme]
-# テーマ設定（オプション）
+# テーマ設定
 primaryColor = "#4ECDC4"
 backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F0F2F6"
@@ -34,13 +22,4 @@ font = "sans serif"
 # パフォーマンス最適化
 fastReruns = true
 magicEnabled = true
-
-[client]
-# クライアント設定
-showErrorDetails = true
-toolbarMode = "auto"
-
-[ui]
-# UI設定
-hideTopBar = false
 

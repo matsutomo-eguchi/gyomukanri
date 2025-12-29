@@ -48,3 +48,8 @@ data/
 .DS_Store
 Thumbs.db
 
+# ローカル実行用ファイル
+run.sh
+run.bat
+streamlit.log
+*.log

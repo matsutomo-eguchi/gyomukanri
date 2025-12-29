@@ -1287,9 +1287,9 @@ def render_daily_report_form():
                     try:
                         # 日時情報の準備
                         work_date = st.session_state.work_date
-                        incident_datetime = datetime.datetime.combine(
+                        incident_datetime = datetime.combine(
                             work_date,
-                            datetime.time(hiyari_time_hour, hiyari_time_min)
+                            time(hiyari_time_hour, hiyari_time_min)
                         )
                         
                         # PDF生成用のデータを準備
