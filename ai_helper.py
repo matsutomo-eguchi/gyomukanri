@@ -1,25 +1,38 @@
 """
 AI文章生成アシストモジュール
 grok-4-1-fast-reasoningを使用した文章生成機能
+Gemini 3.0 Proを使用した音声認識と議事録生成機能
 """
 import os
-from typing import Optional
+from typing import Optional, Dict, Tuple
 import requests
+
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
 
 
 class AIHelper:
     """AI文章生成ヘルパークラス"""
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, gemini_api_key: Optional[str] = None):
         """
         初期化
         
         Args:
             api_key: Grok APIキー（環境変数から取得する場合はNone）
+            gemini_api_key: Gemini APIキー（環境変数から取得する場合はNone）
         """
         self.api_key = api_key or os.getenv("GROK_API_KEY")
         self.api_url = "https://api.x.ai/v1/chat/completions"
         self.model = "grok-4-1-fast-reasoning"
+        
+        # Gemini API設定
+        self.gemini_api_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
+        if GEMINI_AVAILABLE and self.gemini_api_key:
+            genai.configure(api_key=self.gemini_api_key)
     
     def is_available(self) -> bool:
         """APIキーが設定されているかチェック"""
@@ -104,6 +117,183 @@ class AIHelper:
             return False, f"API接続エラー: {str(e)}"
         except Exception as e:
             return False, f"予期しないエラーが発生しました: {str(e)}"
+    
+    def is_gemini_available(self) -> bool:
+        """Gemini APIキーが設定されているかチェック"""
+        return GEMINI_AVAILABLE and self.gemini_api_key is not None and self.gemini_api_key.strip() != ""
+    
+    def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
+        """
+        音声ファイルをテキストに変換（Gemini 2.0 Flash Exp使用）
+        
+        Args:
+            audio_file_path: 音声ファイルのパス
+            
+        Returns:
+            (成功フラグ, 変換されたテキストまたはエラーメッセージ)
+        """
+        if not self.is_gemini_available():
+            return False, "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        if not os.path.exists(audio_file_path):
+            return False, "音声ファイルが見つかりません。"
+        
+        try:
+            # ファイル拡張子からMIMEタイプを判定
+            file_ext = os.path.splitext(audio_file_path)[1].lower()
+            mime_types = {
+                '.mp3': 'audio/mpeg',
+                '.wav': 'audio/wav',
+                '.m4a': 'audio/mp4',
+                '.ogg': 'audio/ogg',
+                '.flac': 'audio/flac',
+                '.webm': 'audio/webm'
+            }
+            mime_type = mime_types.get(file_ext, 'audio/mpeg')
+            
+            # Gemini 2.0 Flash Expを使用して音声をテキストに変換
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            
+            # 音声ファイルをアップロード
+            audio_file_obj = genai.upload_file(
+                path=audio_file_path,
+                mime_type=mime_type
+            )
+            
+            # プロンプトを設定
+            prompt = """この音声は朝礼の議事録です。音声の内容を正確にテキストに変換してください。
+話し手の言葉をそのまま記録し、言いよどみや繰り返しも含めて正確に書き起こしてください。
+不要な編集は行わず、話された内容を忠実に記録してください。"""
+            
+            # 音声認識を実行
+            response = model.generate_content([prompt, audio_file_obj])
+            
+            # テキストを取得
+            transcribed_text = response.text.strip()
+            
+            # アップロードしたファイルを削除
+            genai.delete_file(audio_file_obj.name)
+            
+            return True, transcribed_text
+            
+        except Exception as e:
+            return False, f"音声認識エラー: {str(e)}"
+    
+    def generate_meeting_minutes_from_audio(self, audio_file_path: str) -> Tuple[bool, Dict[str, str]]:
+        """
+        音声ファイルから朝礼議事録を生成（Gemini 2.0 Flash Exp使用）
+        
+        Args:
+            audio_file_path: 音声ファイルのパス
+            
+        Returns:
+            (成功フラグ, 議事録データの辞書またはエラーメッセージ)
+        """
+        if not self.is_gemini_available():
+            return False, "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        if not os.path.exists(audio_file_path):
+            return False, "音声ファイルが見つかりません。"
+        
+        try:
+            # まず音声をテキストに変換
+            success, transcribed_text = self.transcribe_audio_to_text(audio_file_path)
+            if not success:
+                return False, transcribed_text
+            
+            # テキストから議事録を構造化
+            return self.generate_meeting_minutes_from_text(transcribed_text)
+            
+        except Exception as e:
+            return False, f"議事録生成エラー: {str(e)}"
+    
+    def generate_meeting_minutes_from_text(self, text: str) -> Tuple[bool, Dict[str, str]]:
+        """
+        テキストから朝礼議事録を構造化して生成（Gemini 2.0 Flash Exp使用）
+        
+        Args:
+            text: 議事録の元となるテキスト
+            
+        Returns:
+            (成功フラグ, 議事録データの辞書またはエラーメッセージ)
+        """
+        if not self.is_gemini_available():
+            return False, "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        if not text or not text.strip():
+            return False, "テキストが空です。"
+        
+        try:
+            # Gemini 2.0 Flash Expを使用して議事録を構造化
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            
+            prompt = f"""以下の朝礼の音声を書き起こしたテキストから、朝礼議事録を作成してください。
+
+音声テキスト:
+{text}
+
+以下の形式でJSON形式で出力してください。各項目は適切に整理し、必要に応じて要約してください。
+
+{{
+    "議題・内容": "朝礼で話し合った主な議題や内容をまとめて記述してください",
+    "決定事項": "決定した事項があれば箇条書きで記述してください。なければ空文字列にしてください",
+    "共有事項": "スタッフ間で共有すべき事項を箇条書きで記述してください。なければ空文字列にしてください",
+    "その他メモ": "その他の重要なメモがあれば記述してください。なければ空文字列にしてください"
+}}
+
+注意事項:
+- 音声の内容を正確に反映してください
+- 重要な情報を見落とさないようにしてください
+- 各項目は適切に整理し、読みやすくしてください
+- JSON形式のみを返してください（説明文は不要）
+- 日本語で記述してください
+"""
+            
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.3,
+                    max_output_tokens=2000
+                )
+            )
+            
+            # JSONをパース
+            import json
+            import re
+            
+            response_text = response.text.strip()
+            
+            # JSON部分を抽出（コードブロックがあれば除去）
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                json_str = response_text
+            
+            # JSONをパース
+            meeting_data = json.loads(json_str)
+            
+            # 必須フィールドの確認
+            if "議題・内容" not in meeting_data:
+                meeting_data["議題・内容"] = text[:500]  # フォールバック
+            
+            # 空のフィールドを空文字列に設定
+            for key in ["決定事項", "共有事項", "その他メモ"]:
+                if key not in meeting_data:
+                    meeting_data[key] = ""
+            
+            return True, meeting_data
+            
+        except json.JSONDecodeError as e:
+            # JSONパースエラーの場合、テキストをそのまま議題・内容として使用
+            return True, {
+                "議題・内容": text[:1000] if len(text) > 1000 else text,
+                "決定事項": "",
+                "共有事項": "",
+                "その他メモ": ""
+            }
+        except Exception as e:
+            return False, f"議事録生成エラー: {str(e)}"
     
     def improve_text(self, text: str) -> tuple:
         """
@@ -257,6 +447,183 @@ class AIHelper:
         except Exception as e:
             return False, f"予期しないエラーが発生しました: {str(e)}"
     
+    def is_gemini_available(self) -> bool:
+        """Gemini APIキーが設定されているかチェック"""
+        return GEMINI_AVAILABLE and self.gemini_api_key is not None and self.gemini_api_key.strip() != ""
+    
+    def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
+        """
+        音声ファイルをテキストに変換（Gemini 2.0 Flash Exp使用）
+        
+        Args:
+            audio_file_path: 音声ファイルのパス
+            
+        Returns:
+            (成功フラグ, 変換されたテキストまたはエラーメッセージ)
+        """
+        if not self.is_gemini_available():
+            return False, "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        if not os.path.exists(audio_file_path):
+            return False, "音声ファイルが見つかりません。"
+        
+        try:
+            # ファイル拡張子からMIMEタイプを判定
+            file_ext = os.path.splitext(audio_file_path)[1].lower()
+            mime_types = {
+                '.mp3': 'audio/mpeg',
+                '.wav': 'audio/wav',
+                '.m4a': 'audio/mp4',
+                '.ogg': 'audio/ogg',
+                '.flac': 'audio/flac',
+                '.webm': 'audio/webm'
+            }
+            mime_type = mime_types.get(file_ext, 'audio/mpeg')
+            
+            # Gemini 2.0 Flash Expを使用して音声をテキストに変換
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            
+            # 音声ファイルをアップロード
+            audio_file_obj = genai.upload_file(
+                path=audio_file_path,
+                mime_type=mime_type
+            )
+            
+            # プロンプトを設定
+            prompt = """この音声は朝礼の議事録です。音声の内容を正確にテキストに変換してください。
+話し手の言葉をそのまま記録し、言いよどみや繰り返しも含めて正確に書き起こしてください。
+不要な編集は行わず、話された内容を忠実に記録してください。"""
+            
+            # 音声認識を実行
+            response = model.generate_content([prompt, audio_file_obj])
+            
+            # テキストを取得
+            transcribed_text = response.text.strip()
+            
+            # アップロードしたファイルを削除
+            genai.delete_file(audio_file_obj.name)
+            
+            return True, transcribed_text
+            
+        except Exception as e:
+            return False, f"音声認識エラー: {str(e)}"
+    
+    def generate_meeting_minutes_from_audio(self, audio_file_path: str) -> Tuple[bool, Dict[str, str]]:
+        """
+        音声ファイルから朝礼議事録を生成（Gemini 2.0 Flash Exp使用）
+        
+        Args:
+            audio_file_path: 音声ファイルのパス
+            
+        Returns:
+            (成功フラグ, 議事録データの辞書またはエラーメッセージ)
+        """
+        if not self.is_gemini_available():
+            return False, "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        if not os.path.exists(audio_file_path):
+            return False, "音声ファイルが見つかりません。"
+        
+        try:
+            # まず音声をテキストに変換
+            success, transcribed_text = self.transcribe_audio_to_text(audio_file_path)
+            if not success:
+                return False, transcribed_text
+            
+            # テキストから議事録を構造化
+            return self.generate_meeting_minutes_from_text(transcribed_text)
+            
+        except Exception as e:
+            return False, f"議事録生成エラー: {str(e)}"
+    
+    def generate_meeting_minutes_from_text(self, text: str) -> Tuple[bool, Dict[str, str]]:
+        """
+        テキストから朝礼議事録を構造化して生成（Gemini 2.0 Flash Exp使用）
+        
+        Args:
+            text: 議事録の元となるテキスト
+            
+        Returns:
+            (成功フラグ, 議事録データの辞書またはエラーメッセージ)
+        """
+        if not self.is_gemini_available():
+            return False, "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        if not text or not text.strip():
+            return False, "テキストが空です。"
+        
+        try:
+            # Gemini 2.0 Flash Expを使用して議事録を構造化
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            
+            prompt = f"""以下の朝礼の音声を書き起こしたテキストから、朝礼議事録を作成してください。
+
+音声テキスト:
+{text}
+
+以下の形式でJSON形式で出力してください。各項目は適切に整理し、必要に応じて要約してください。
+
+{{
+    "議題・内容": "朝礼で話し合った主な議題や内容をまとめて記述してください",
+    "決定事項": "決定した事項があれば箇条書きで記述してください。なければ空文字列にしてください",
+    "共有事項": "スタッフ間で共有すべき事項を箇条書きで記述してください。なければ空文字列にしてください",
+    "その他メモ": "その他の重要なメモがあれば記述してください。なければ空文字列にしてください"
+}}
+
+注意事項:
+- 音声の内容を正確に反映してください
+- 重要な情報を見落とさないようにしてください
+- 各項目は適切に整理し、読みやすくしてください
+- JSON形式のみを返してください（説明文は不要）
+- 日本語で記述してください
+"""
+            
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.3,
+                    max_output_tokens=2000
+                )
+            )
+            
+            # JSONをパース
+            import json
+            import re
+            
+            response_text = response.text.strip()
+            
+            # JSON部分を抽出（コードブロックがあれば除去）
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                json_str = response_text
+            
+            # JSONをパース
+            meeting_data = json.loads(json_str)
+            
+            # 必須フィールドの確認
+            if "議題・内容" not in meeting_data:
+                meeting_data["議題・内容"] = text[:500]  # フォールバック
+            
+            # 空のフィールドを空文字列に設定
+            for key in ["決定事項", "共有事項", "その他メモ"]:
+                if key not in meeting_data:
+                    meeting_data[key] = ""
+            
+            return True, meeting_data
+            
+        except json.JSONDecodeError as e:
+            # JSONパースエラーの場合、テキストをそのまま議題・内容として使用
+            return True, {
+                "議題・内容": text[:1000] if len(text) > 1000 else text,
+                "決定事項": "",
+                "共有事項": "",
+                "その他メモ": ""
+            }
+        except Exception as e:
+            return False, f"議事録生成エラー: {str(e)}"
+    
     def generate_hiyari_hatto_report(self, keywords: str, report_type: str = "details") -> tuple:
         """
         ヒヤリハット報告書の各項目の文章を生成
@@ -343,4 +710,181 @@ class AIHelper:
             return False, f"API接続エラー: {str(e)}"
         except Exception as e:
             return False, f"予期しないエラーが発生しました: {str(e)}"
+    
+    def is_gemini_available(self) -> bool:
+        """Gemini APIキーが設定されているかチェック"""
+        return GEMINI_AVAILABLE and self.gemini_api_key is not None and self.gemini_api_key.strip() != ""
+    
+    def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
+        """
+        音声ファイルをテキストに変換（Gemini 2.0 Flash Exp使用）
+        
+        Args:
+            audio_file_path: 音声ファイルのパス
+            
+        Returns:
+            (成功フラグ, 変換されたテキストまたはエラーメッセージ)
+        """
+        if not self.is_gemini_available():
+            return False, "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        if not os.path.exists(audio_file_path):
+            return False, "音声ファイルが見つかりません。"
+        
+        try:
+            # ファイル拡張子からMIMEタイプを判定
+            file_ext = os.path.splitext(audio_file_path)[1].lower()
+            mime_types = {
+                '.mp3': 'audio/mpeg',
+                '.wav': 'audio/wav',
+                '.m4a': 'audio/mp4',
+                '.ogg': 'audio/ogg',
+                '.flac': 'audio/flac',
+                '.webm': 'audio/webm'
+            }
+            mime_type = mime_types.get(file_ext, 'audio/mpeg')
+            
+            # Gemini 2.0 Flash Expを使用して音声をテキストに変換
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            
+            # 音声ファイルをアップロード
+            audio_file_obj = genai.upload_file(
+                path=audio_file_path,
+                mime_type=mime_type
+            )
+            
+            # プロンプトを設定
+            prompt = """この音声は朝礼の議事録です。音声の内容を正確にテキストに変換してください。
+話し手の言葉をそのまま記録し、言いよどみや繰り返しも含めて正確に書き起こしてください。
+不要な編集は行わず、話された内容を忠実に記録してください。"""
+            
+            # 音声認識を実行
+            response = model.generate_content([prompt, audio_file_obj])
+            
+            # テキストを取得
+            transcribed_text = response.text.strip()
+            
+            # アップロードしたファイルを削除
+            genai.delete_file(audio_file_obj.name)
+            
+            return True, transcribed_text
+            
+        except Exception as e:
+            return False, f"音声認識エラー: {str(e)}"
+    
+    def generate_meeting_minutes_from_audio(self, audio_file_path: str) -> Tuple[bool, Dict[str, str]]:
+        """
+        音声ファイルから朝礼議事録を生成（Gemini 2.0 Flash Exp使用）
+        
+        Args:
+            audio_file_path: 音声ファイルのパス
+            
+        Returns:
+            (成功フラグ, 議事録データの辞書またはエラーメッセージ)
+        """
+        if not self.is_gemini_available():
+            return False, "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        if not os.path.exists(audio_file_path):
+            return False, "音声ファイルが見つかりません。"
+        
+        try:
+            # まず音声をテキストに変換
+            success, transcribed_text = self.transcribe_audio_to_text(audio_file_path)
+            if not success:
+                return False, transcribed_text
+            
+            # テキストから議事録を構造化
+            return self.generate_meeting_minutes_from_text(transcribed_text)
+            
+        except Exception as e:
+            return False, f"議事録生成エラー: {str(e)}"
+    
+    def generate_meeting_minutes_from_text(self, text: str) -> Tuple[bool, Dict[str, str]]:
+        """
+        テキストから朝礼議事録を構造化して生成（Gemini 2.0 Flash Exp使用）
+        
+        Args:
+            text: 議事録の元となるテキスト
+            
+        Returns:
+            (成功フラグ, 議事録データの辞書またはエラーメッセージ)
+        """
+        if not self.is_gemini_available():
+            return False, "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        if not text or not text.strip():
+            return False, "テキストが空です。"
+        
+        try:
+            # Gemini 2.0 Flash Expを使用して議事録を構造化
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            
+            prompt = f"""以下の朝礼の音声を書き起こしたテキストから、朝礼議事録を作成してください。
+
+音声テキスト:
+{text}
+
+以下の形式でJSON形式で出力してください。各項目は適切に整理し、必要に応じて要約してください。
+
+{{
+    "議題・内容": "朝礼で話し合った主な議題や内容をまとめて記述してください",
+    "決定事項": "決定した事項があれば箇条書きで記述してください。なければ空文字列にしてください",
+    "共有事項": "スタッフ間で共有すべき事項を箇条書きで記述してください。なければ空文字列にしてください",
+    "その他メモ": "その他の重要なメモがあれば記述してください。なければ空文字列にしてください"
+}}
+
+注意事項:
+- 音声の内容を正確に反映してください
+- 重要な情報を見落とさないようにしてください
+- 各項目は適切に整理し、読みやすくしてください
+- JSON形式のみを返してください（説明文は不要）
+- 日本語で記述してください
+"""
+            
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.3,
+                    max_output_tokens=2000
+                )
+            )
+            
+            # JSONをパース
+            import json
+            import re
+            
+            response_text = response.text.strip()
+            
+            # JSON部分を抽出（コードブロックがあれば除去）
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                json_str = response_text
+            
+            # JSONをパース
+            meeting_data = json.loads(json_str)
+            
+            # 必須フィールドの確認
+            if "議題・内容" not in meeting_data:
+                meeting_data["議題・内容"] = text[:500]  # フォールバック
+            
+            # 空のフィールドを空文字列に設定
+            for key in ["決定事項", "共有事項", "その他メモ"]:
+                if key not in meeting_data:
+                    meeting_data[key] = ""
+            
+            return True, meeting_data
+            
+        except json.JSONDecodeError as e:
+            # JSONパースエラーの場合、テキストをそのまま議題・内容として使用
+            return True, {
+                "議題・内容": text[:1000] if len(text) > 1000 else text,
+                "決定事項": "",
+                "共有事項": "",
+                "その他メモ": ""
+            }
+        except Exception as e:
+            return False, f"議事録生成エラー: {str(e)}"
 

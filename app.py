@@ -63,9 +63,11 @@ if 'data_manager' not in st.session_state:
 if 'ai_helper' not in st.session_state:
     # APIキーの取得（優先順位: 環境変数 > Streamlit Secrets > 保存された設定）
     api_key = None
+    gemini_api_key = None
     
     # 1. 環境変数から取得
     api_key = os.getenv("GROK_API_KEY", None)
+    gemini_api_key = os.getenv("GEMINI_API_KEY", None)
     
     # 2. Streamlit Secretsから取得
     if not api_key:
@@ -75,11 +77,21 @@ if 'ai_helper' not in st.session_state:
         except (FileNotFoundError, AttributeError):
             pass
     
+    if not gemini_api_key:
+        try:
+            if hasattr(st, 'secrets') and hasattr(st.secrets, 'get'):
+                gemini_api_key = st.secrets.get("GEMINI_API_KEY", None)
+        except (FileNotFoundError, AttributeError):
+            pass
+    
     # 3. 保存された設定から取得
     if not api_key:
         api_key = st.session_state.data_manager.get_api_key()
     
-    st.session_state.ai_helper = AIHelper(api_key=api_key)
+    if not gemini_api_key:
+        gemini_api_key = st.session_state.data_manager.get_gemini_api_key()
+    
+    st.session_state.ai_helper = AIHelper(api_key=api_key, gemini_api_key=gemini_api_key)
 
 if 'current_page' not in st.session_state:
     st.session_state.current_page = "日報入力"
@@ -1543,6 +1555,70 @@ def render_morning_meeting():
     with tab1:
         st.markdown('<div class="section-header">📝 朝礼議事録入力</div>', unsafe_allow_html=True)
         
+        # 音声から議事録を生成する機能
+        st.markdown("#### 🎤 音声から議事録を生成（Gemini 3.0 Pro）")
+        st.info("音声ファイルをアップロードすると、自動的に議事録を作成します。")
+        
+        uploaded_audio = st.file_uploader(
+            "音声ファイルをアップロード",
+            type=['mp3', 'wav', 'm4a', 'ogg', 'flac', 'webm'],
+            key="audio_upload",
+            help="対応形式: MP3, WAV, M4A, OGG, FLAC, WEBM"
+        )
+        
+        if uploaded_audio is not None:
+            # Gemini APIキーの確認
+            gemini_api_key = os.getenv("GEMINI_API_KEY")
+            if hasattr(st, 'secrets') and hasattr(st.secrets, 'get'):
+                try:
+                    gemini_api_key = gemini_api_key or st.secrets.get("GEMINI_API_KEY", None)
+                except:
+                    pass
+            
+            if not gemini_api_key:
+                st.warning("⚠️ Gemini APIキーが設定されていません。設定画面でAPIキーを設定してください。")
+            else:
+                # AIHelperにGemini APIキーを設定
+                if not hasattr(st.session_state.ai_helper, 'gemini_api_key') or not st.session_state.ai_helper.gemini_api_key:
+                    st.session_state.ai_helper.gemini_api_key = gemini_api_key
+                    try:
+                        import google.generativeai as genai
+                        genai.configure(api_key=gemini_api_key)
+                    except ImportError:
+                        st.error("google-generativeaiパッケージがインストールされていません。requirements.txtからインストールしてください。")
+                
+                if st.button("🎤 音声から議事録を生成", use_container_width=True, type="primary"):
+                    with st.spinner("音声を解析中...（数分かかる場合があります）"):
+                        # 一時ファイルに保存
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_audio.name)[1]) as tmp_file:
+                            tmp_file.write(uploaded_audio.getvalue())
+                            tmp_audio_path = tmp_file.name
+                        
+                        try:
+                            # 音声から議事録を生成
+                            success, result = st.session_state.ai_helper.generate_meeting_minutes_from_audio(tmp_audio_path)
+                            
+                            if success and isinstance(result, dict):
+                                # 生成された議事録をフォームに反映
+                                st.session_state.meeting_agenda = result.get("議題・内容", "")
+                                st.session_state.meeting_decisions = result.get("決定事項", "")
+                                st.session_state.meeting_shared = result.get("共有事項", "")
+                                st.session_state.meeting_notes = result.get("その他メモ", "")
+                                
+                                st.success("✅ 議事録を生成しました！以下の内容を確認・編集して保存してください。")
+                                st.rerun()
+                            else:
+                                st.error(f"議事録の生成に失敗しました: {result}")
+                        except Exception as e:
+                            st.error(f"エラーが発生しました: {str(e)}")
+                        finally:
+                            # 一時ファイルを削除
+                            if os.path.exists(tmp_audio_path):
+                                os.unlink(tmp_audio_path)
+        
+        st.markdown("---")
+        
         with st.form("morning_meeting_form"):
             meeting_date = st.date_input(
                 "日付 *",
@@ -1555,7 +1631,8 @@ def render_morning_meeting():
                 "議題・内容 *",
                 height=150,
                 key="meeting_agenda",
-                placeholder="朝礼で話し合った内容を記入してください"
+                placeholder="朝礼で話し合った内容を記入してください",
+                value=st.session_state.get("meeting_agenda", "")
             )
             
             st.markdown("#### 決定事項")
@@ -1563,7 +1640,8 @@ def render_morning_meeting():
                 "決定事項",
                 height=120,
                 key="meeting_decisions",
-                placeholder="決定した事項があれば記入してください"
+                placeholder="決定した事項があれば記入してください",
+                value=st.session_state.get("meeting_decisions", "")
             )
             
             st.markdown("#### 共有事項")
@@ -1571,7 +1649,8 @@ def render_morning_meeting():
                 "共有事項",
                 height=120,
                 key="meeting_shared",
-                placeholder="スタッフ間で共有すべき事項を記入してください"
+                placeholder="スタッフ間で共有すべき事項を記入してください",
+                value=st.session_state.get("meeting_shared", "")
             )
             
             st.markdown("#### その他メモ")
@@ -1579,7 +1658,8 @@ def render_morning_meeting():
                 "その他メモ",
                 height=100,
                 key="meeting_notes",
-                placeholder="その他のメモがあれば記入してください"
+                placeholder="その他のメモがあれば記入してください",
+                value=st.session_state.get("meeting_notes", "")
             )
             
             submitted = st.form_submit_button("💾 議事録を保存", use_container_width=True, type="primary")
@@ -1605,6 +1685,15 @@ def render_morning_meeting():
                     if st.session_state.data_manager.save_morning_meeting(meeting_data):
                         st.success("✅ 朝礼議事録を保存しました！")
                         st.balloons()
+                        # セッション状態をクリア
+                        if "meeting_agenda" in st.session_state:
+                            del st.session_state.meeting_agenda
+                        if "meeting_decisions" in st.session_state:
+                            del st.session_state.meeting_decisions
+                        if "meeting_shared" in st.session_state:
+                            del st.session_state.meeting_shared
+                        if "meeting_notes" in st.session_state:
+                            del st.session_state.meeting_notes
                         st.rerun()
                     else:
                         st.error("保存に失敗しました。")
@@ -1874,6 +1963,68 @@ def render_settings():
                 st.rerun()
             else:
                 st.error("APIキーを入力してください")
+    
+    st.markdown("---")
+    
+    # Gemini APIキーの設定
+    st.markdown("#### Gemini API キー設定")
+    st.info("音声から朝礼議事録を作成する機能を使用するには、Gemini APIキーが必要です。")
+    
+    current_gemini_key = st.session_state.ai_helper.gemini_api_key if hasattr(st.session_state.ai_helper, 'gemini_api_key') else ""
+    masked_gemini_key = "***" + current_gemini_key[-4:] if len(current_gemini_key) > 4 else ""
+    
+    if current_gemini_key:
+        st.success(f"✅ Gemini APIキーが設定されています（末尾4桁: {masked_gemini_key}）")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("🗑️ Gemini APIキーを削除", type="secondary", use_container_width=True):
+                if st.session_state.data_manager.delete_gemini_api_key():
+                    st.session_state.ai_helper.gemini_api_key = None
+                    st.success("✅ Gemini APIキーを削除しました")
+                    st.rerun()
+    else:
+        st.warning("⚠️ Gemini APIキーが設定されていません")
+    
+    new_gemini_api_key = st.text_input(
+        "新しいGemini APIキーを入力",
+        type="password",
+        key="new_gemini_api_key",
+        placeholder="Gemini APIキーを入力してください",
+        help="環境変数 GEMINI_API_KEY に設定することもできます"
+    )
+    
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("💾 Gemini APIキーを保存", use_container_width=True):
+            if new_gemini_api_key and new_gemini_api_key.strip():
+                if st.session_state.data_manager.save_gemini_api_key(new_gemini_api_key.strip()):
+                    st.session_state.ai_helper.gemini_api_key = new_gemini_api_key.strip()
+                    try:
+                        import google.generativeai as genai
+                        genai.configure(api_key=new_gemini_api_key.strip())
+                    except ImportError:
+                        st.error("google-generativeaiパッケージがインストールされていません。")
+                    st.success("✅ Gemini APIキーを保存しました")
+                    st.rerun()
+                else:
+                    st.error("Gemini APIキーの保存に失敗しました")
+            else:
+                st.error("Gemini APIキーを入力してください")
+    
+    with col2:
+        if st.button("🔄 Gemini APIキーを更新（一時的）", use_container_width=True):
+            if new_gemini_api_key and new_gemini_api_key.strip():
+                st.session_state.ai_helper.gemini_api_key = new_gemini_api_key.strip()
+                try:
+                    import google.generativeai as genai
+                    genai.configure(api_key=new_gemini_api_key.strip())
+                    st.success("✅ Gemini APIキーを更新しました（このセッションのみ有効）")
+                    st.info("💡 永続的に保存するには「Gemini APIキーを保存」ボタンを使用してください")
+                    st.rerun()
+                except ImportError:
+                    st.error("google-generativeaiパッケージがインストールされていません。")
+            else:
+                st.error("Gemini APIキーを入力してください")
     
     st.markdown("---")
     

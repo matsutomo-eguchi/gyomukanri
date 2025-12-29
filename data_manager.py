@@ -625,6 +625,52 @@ class DataManager:
             print(f"APIキー削除エラー: {e}")
             return False
     
+    def save_gemini_api_key(self, api_key: str) -> bool:
+        """
+        Gemini APIキーを保存
+        
+        Args:
+            api_key: Gemini APIキー
+            
+        Returns:
+            成功した場合True
+        """
+        try:
+            config = self._load_config()
+            config["gemini_api_key"] = api_key
+            self._save_config(config)
+            return True
+        except Exception as e:
+            print(f"Gemini APIキー保存エラー: {e}")
+            return False
+    
+    def get_gemini_api_key(self) -> Optional[str]:
+        """
+        Gemini APIキーを取得
+        
+        Returns:
+            APIキー（存在しない場合はNone）
+        """
+        config = self._load_config()
+        return config.get("gemini_api_key")
+    
+    def delete_gemini_api_key(self) -> bool:
+        """
+        Gemini APIキーを削除
+        
+        Returns:
+            成功した場合True
+        """
+        try:
+            config = self._load_config()
+            if "gemini_api_key" in config:
+                del config["gemini_api_key"]
+                self._save_config(config)
+            return True
+        except Exception as e:
+            print(f"Gemini APIキー削除エラー: {e}")
+            return False
+    
     def _init_staff_accounts_file(self):
         """スタッフアカウントファイルが存在しない場合、初期化（既存データは保護）"""
         # 既存データを絶対に上書きしない
