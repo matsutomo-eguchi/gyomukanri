@@ -1773,9 +1773,50 @@ def render_morning_meeting():
         else:
             st.markdown(f"**{len(meetings)}件の議事録が見つかりました**")
             
+            # 検索機能
+            search_query = st.text_input(
+                "🔍 検索（議題・内容、決定事項、共有事項、メモ、スタッフ名で検索）",
+                key="meeting_search",
+                placeholder="検索キーワードを入力..."
+            )
+            
+            # 並び替えオプション
+            sort_option = st.selectbox(
+                "並び替え",
+                options=["日付（新しい順）", "日付（古い順）", "スタッフ名", "作成日時（新しい順）"],
+                key="meeting_sort",
+                index=0
+            )
+            
+            # 検索と並び替えを適用
+            filtered_meetings = meetings
+            if search_query:
+                search_lower = search_query.lower()
+                filtered_meetings = [
+                    m for m in meetings
+                    if search_lower in m.get("議題・内容", "").lower()
+                    or search_lower in m.get("決定事項", "").lower()
+                    or search_lower in m.get("共有事項", "").lower()
+                    or search_lower in m.get("その他メモ", "").lower()
+                    or search_lower in m.get("記入スタッフ名", "").lower()
+                ]
+            
+            # 並び替え
+            if sort_option == "日付（新しい順）":
+                filtered_meetings.sort(key=lambda x: x.get("日付", ""), reverse=True)
+            elif sort_option == "日付（古い順）":
+                filtered_meetings.sort(key=lambda x: x.get("日付", ""))
+            elif sort_option == "スタッフ名":
+                filtered_meetings.sort(key=lambda x: x.get("記入スタッフ名", ""))
+            elif sort_option == "作成日時（新しい順）":
+                filtered_meetings.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            
+            if search_query and not filtered_meetings:
+                st.warning(f"「{search_query}」に一致する議事録が見つかりませんでした。")
+            
             # 議事録を選択
             meeting_options = {}
-            for meeting in meetings:
+            for meeting in filtered_meetings:
                 meeting_date_str = meeting.get("日付", "")
                 created_at = meeting.get("created_at", "")
                 try:
@@ -1797,13 +1838,17 @@ def render_morning_meeting():
                     display_name = f"議事録 - {meeting.get('記入スタッフ名', '不明')}"
                     meeting_options[display_name] = meeting
             
-            selected_display = st.selectbox(
-                "閲覧する議事録を選択してください",
-                options=list(meeting_options.keys()),
-                key="selected_meeting"
-            )
+            if meeting_options:
+                selected_display = st.selectbox(
+                    f"閲覧する議事録を選択してください（{len(meeting_options)}件）",
+                    options=list(meeting_options.keys()),
+                    key="selected_meeting"
+                )
+            else:
+                selected_display = None
+                st.info("表示する議事録がありません。")
             
-            if selected_display:
+            if selected_display and selected_display in meeting_options:
                 selected_meeting = meeting_options[selected_display]
                 
                 st.markdown("---")
@@ -1856,14 +1901,37 @@ def render_morning_meeting():
                 
                 st.markdown("---")
                 
-                # 削除ボタン
-                if st.button("🗑️ この議事録を削除", use_container_width=True, type="secondary"):
-                    meeting_id = selected_meeting.get("created_at")
-                    if meeting_id and dm.delete_morning_meeting(meeting_id):
-                        st.success("✅ 議事録を削除しました")
-                        st.rerun()
+                # 削除機能
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    # 削除確認用のセッションステート
+                    delete_key = f"delete_meeting_{selected_meeting.get('created_at', '')}"
+                    if delete_key not in st.session_state:
+                        st.session_state[delete_key] = False
+                    
+                    if not st.session_state[delete_key]:
+                        if st.button("🗑️ この議事録を削除", use_container_width=True, type="secondary"):
+                            st.session_state[delete_key] = True
+                            st.rerun()
                     else:
-                        st.error("削除に失敗しました")
+                        st.warning("⚠️ 本当に削除しますか？")
+                        col_confirm1, col_confirm2 = st.columns([1, 1])
+                        with col_confirm1:
+                            if st.button("✅ 削除する", use_container_width=True, type="primary"):
+                                meeting_id = selected_meeting.get("created_at")
+                                if meeting_id and dm.delete_morning_meeting(meeting_id):
+                                    st.success("✅ 議事録を削除しました")
+                                    # セッションステートをクリア
+                                    if delete_key in st.session_state:
+                                        del st.session_state[delete_key]
+                                    st.rerun()
+                                else:
+                                    st.error("削除に失敗しました")
+                                    st.session_state[delete_key] = False
+                        with col_confirm2:
+                            if st.button("❌ キャンセル", use_container_width=True):
+                                st.session_state[delete_key] = False
+                                st.rerun()
 
 
 def render_settings():
