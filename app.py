@@ -1592,13 +1592,20 @@ def render_morning_meeting():
             
             # AIHelperにGemini APIキーを設定
             if gemini_api_key:
-                if not hasattr(st.session_state.ai_helper, 'gemini_api_key') or not st.session_state.ai_helper.gemini_api_key:
-                    st.session_state.ai_helper.gemini_api_key = gemini_api_key
-                    try:
-                        import google.generativeai as genai
-                        genai.configure(api_key=gemini_api_key)
-                    except ImportError:
-                        st.error("google-generativeaiパッケージがインストールされていません。requirements.txtからインストールしてください。")
+                # APIキーをクリーンアップ（余分な空白や改行を削除）
+                gemini_api_key = gemini_api_key.strip()
+                # 複数のAPIキーが結合されている可能性があるため、最初の有効なキーのみを使用
+                if ' ' in gemini_api_key:
+                    # スペースで区切られている場合、最初の部分のみを使用
+                    gemini_api_key = gemini_api_key.split()[0]
+                
+                # APIキーを設定し、genai.configure()を呼び出す
+                st.session_state.ai_helper.gemini_api_key = gemini_api_key
+                try:
+                    import google.generativeai as genai
+                    genai.configure(api_key=gemini_api_key)
+                except ImportError:
+                    st.error("google-generativeaiパッケージがインストールされていません。requirements.txtからインストールしてください。")
             
             # 最終的にis_gemini_available()で確認
             if not st.session_state.ai_helper.is_gemini_available():

@@ -122,6 +122,26 @@ class AIHelper:
         """Gemini APIキーが設定されているかチェック"""
         return GEMINI_AVAILABLE and self.gemini_api_key is not None and self.gemini_api_key.strip() != ""
     
+    def _ensure_gemini_configured(self):
+        """Gemini APIキーが正しく設定されているか確認し、必要に応じて設定する"""
+        if not GEMINI_AVAILABLE or not self.gemini_api_key:
+            return False
+        
+        try:
+            # APIキーをクリーンアップ（余分な空白や改行を削除）
+            api_key = self.gemini_api_key.strip()
+            # 複数のAPIキーが結合されている可能性があるため、最初の有効なキーのみを使用
+            if ' ' in api_key:
+                # スペースで区切られている場合、最初の部分のみを使用
+                api_key = api_key.split()[0]
+            
+            # genai.configure()を再呼び出して、最新のAPIキーを設定
+            genai.configure(api_key=api_key)
+            self.gemini_api_key = api_key
+            return True
+        except Exception:
+            return False
+    
     def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
         """
         音声ファイルをテキストに変換（Gemini 2.0 Flash Exp使用）
@@ -137,6 +157,10 @@ class AIHelper:
         
         if not os.path.exists(audio_file_path):
             return False, "音声ファイルが見つかりません。"
+        
+        # APIキーが正しく設定されているか確認
+        if not self._ensure_gemini_configured():
+            return False, "Gemini APIキーの設定に失敗しました。設定画面でAPIキーを確認してください。"
         
         try:
             # ファイル拡張子からMIMEタイプを判定
@@ -222,6 +246,10 @@ class AIHelper:
         
         if not text or not text.strip():
             return False, "テキストが空です。"
+        
+        # APIキーが正しく設定されているか確認
+        if not self._ensure_gemini_configured():
+            return False, "Gemini APIキーの設定に失敗しました。設定画面でAPIキーを確認してください。"
         
         try:
             # Gemini 2.0 Flash Expを使用して議事録を構造化
@@ -451,6 +479,26 @@ class AIHelper:
         """Gemini APIキーが設定されているかチェック"""
         return GEMINI_AVAILABLE and self.gemini_api_key is not None and self.gemini_api_key.strip() != ""
     
+    def _ensure_gemini_configured(self):
+        """Gemini APIキーが正しく設定されているか確認し、必要に応じて設定する"""
+        if not GEMINI_AVAILABLE or not self.gemini_api_key:
+            return False
+        
+        try:
+            # APIキーをクリーンアップ（余分な空白や改行を削除）
+            api_key = self.gemini_api_key.strip()
+            # 複数のAPIキーが結合されている可能性があるため、最初の有効なキーのみを使用
+            if ' ' in api_key:
+                # スペースで区切られている場合、最初の部分のみを使用
+                api_key = api_key.split()[0]
+            
+            # genai.configure()を再呼び出して、最新のAPIキーを設定
+            genai.configure(api_key=api_key)
+            self.gemini_api_key = api_key
+            return True
+        except Exception:
+            return False
+    
     def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
         """
         音声ファイルをテキストに変換（Gemini 2.0 Flash Exp使用）
@@ -466,6 +514,10 @@ class AIHelper:
         
         if not os.path.exists(audio_file_path):
             return False, "音声ファイルが見つかりません。"
+        
+        # APIキーが正しく設定されているか確認
+        if not self._ensure_gemini_configured():
+            return False, "Gemini APIキーの設定に失敗しました。設定画面でAPIキーを確認してください。"
         
         try:
             # ファイル拡張子からMIMEタイプを判定
@@ -551,6 +603,10 @@ class AIHelper:
         
         if not text or not text.strip():
             return False, "テキストが空です。"
+        
+        # APIキーが正しく設定されているか確認
+        if not self._ensure_gemini_configured():
+            return False, "Gemini APIキーの設定に失敗しました。設定画面でAPIキーを確認してください。"
         
         try:
             # Gemini 2.0 Flash Expを使用して議事録を構造化
@@ -715,6 +771,26 @@ class AIHelper:
         """Gemini APIキーが設定されているかチェック"""
         return GEMINI_AVAILABLE and self.gemini_api_key is not None and self.gemini_api_key.strip() != ""
     
+    def _ensure_gemini_configured(self):
+        """Gemini APIキーが正しく設定されているか確認し、必要に応じて設定する"""
+        if not GEMINI_AVAILABLE or not self.gemini_api_key:
+            return False
+        
+        try:
+            # APIキーをクリーンアップ（余分な空白や改行を削除）
+            api_key = self.gemini_api_key.strip()
+            # 複数のAPIキーが結合されている可能性があるため、最初の有効なキーのみを使用
+            if ' ' in api_key:
+                # スペースで区切られている場合、最初の部分のみを使用
+                api_key = api_key.split()[0]
+            
+            # genai.configure()を再呼び出して、最新のAPIキーを設定
+            genai.configure(api_key=api_key)
+            self.gemini_api_key = api_key
+            return True
+        except Exception:
+            return False
+    
     def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
         """
         音声ファイルをテキストに変換（Gemini 2.0 Flash Exp使用）
@@ -730,6 +806,10 @@ class AIHelper:
         
         if not os.path.exists(audio_file_path):
             return False, "音声ファイルが見つかりません。"
+        
+        # APIキーが正しく設定されているか確認
+        if not self._ensure_gemini_configured():
+            return False, "Gemini APIキーの設定に失敗しました。設定画面でAPIキーを確認してください。"
         
         try:
             # ファイル拡張子からMIMEタイプを判定
@@ -815,6 +895,10 @@ class AIHelper:
         
         if not text or not text.strip():
             return False, "テキストが空です。"
+        
+        # APIキーが正しく設定されているか確認
+        if not self._ensure_gemini_configured():
+            return False, "Gemini APIキーの設定に失敗しました。設定画面でAPIキーを確認してください。"
         
         try:
             # Gemini 2.0 Flash Expを使用して議事録を構造化
