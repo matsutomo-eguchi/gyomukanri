@@ -1556,8 +1556,24 @@ def render_morning_meeting():
         st.markdown('<div class="section-header">📝 朝礼議事録入力</div>', unsafe_allow_html=True)
         
         # 音声から議事録を生成する機能
-        st.markdown("#### 🎤 音声から議事録を生成（Gemini 3.0 Pro）")
+        st.markdown("#### 🎤 音声から議事録を生成（Gemini 3 Flash Preview）")
         st.info("音声ファイルをアップロードすると、自動的に議事録を作成します。")
+        
+        # 補助情報入力欄
+        with st.expander("📝 補助情報を入力（任意）", expanded=False):
+            st.markdown("**名前や固有名詞などの補助情報を入力すると、音声認識の精度が向上します。**")
+            st.markdown("例：")
+            st.markdown("- 参加者の名前：田中太郎、佐藤花子")
+            st.markdown("- 施設名：○○デイサービス")
+            st.markdown("- その他の固有名詞：○○公園、○○小学校")
+            
+            context_info = st.text_area(
+                "補助情報を入力してください",
+                height=100,
+                key="audio_context_info",
+                placeholder="例：参加者：田中太郎、佐藤花子、鈴木一郎\n施設名：○○デイサービス\nその他：○○公園、○○小学校",
+                help="音声内で使用される可能性のある名前や固有名詞を記載してください。改行で区切って複数入力できます。"
+            )
         
         uploaded_audio = st.file_uploader(
             "音声ファイルをアップロード",
@@ -1621,8 +1637,14 @@ def render_morning_meeting():
                             tmp_audio_path = tmp_file.name
                         
                         try:
-                            # 音声から議事録を生成
-                            success, result = st.session_state.ai_helper.generate_meeting_minutes_from_audio(tmp_audio_path)
+                            # 補助情報を取得
+                            context_info = st.session_state.get("audio_context_info", "")
+                            
+                            # 音声から議事録を生成（補助情報を含める）
+                            success, result = st.session_state.ai_helper.generate_meeting_minutes_from_audio(
+                                tmp_audio_path,
+                                context_info=context_info if context_info else None
+                            )
                             
                             if success and isinstance(result, dict):
                                 # 生成された議事録をフォームに反映

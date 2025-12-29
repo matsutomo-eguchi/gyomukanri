@@ -142,12 +142,13 @@ class AIHelper:
         except Exception:
             return False
     
-    def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
+    def transcribe_audio_to_text(self, audio_file_path: str, context_info: Optional[str] = None) -> Tuple[bool, str]:
         """
         音声ファイルをテキストに変換（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
+            context_info: 補助情報（名前、固有名詞など）を記載したテキスト
             
         Returns:
             (成功フラグ, 変換されたテキストまたはエラーメッセージ)
@@ -189,6 +190,15 @@ class AIHelper:
 話し手の言葉をそのまま記録し、言いよどみや繰り返しも含めて正確に書き起こしてください。
 不要な編集は行わず、話された内容を忠実に記録してください。"""
             
+            # 補助情報がある場合はプロンプトに追加
+            if context_info and context_info.strip():
+                prompt += f"""
+
+以下の情報を参考にして、音声内の名前や固有名詞の認識精度を向上させてください：
+{context_info}
+
+これらの情報を参考にしながら、音声の内容を正確にテキストに変換してください。"""
+            
             # 音声認識を実行
             response = model.generate_content([prompt, audio_file_obj])
             
@@ -203,12 +213,13 @@ class AIHelper:
         except Exception as e:
             return False, f"音声認識エラー: {str(e)}"
     
-    def generate_meeting_minutes_from_audio(self, audio_file_path: str) -> Tuple[bool, Dict[str, str]]:
+    def generate_meeting_minutes_from_audio(self, audio_file_path: str, context_info: Optional[str] = None) -> Tuple[bool, Dict[str, str]]:
         """
         音声ファイルから朝礼議事録を生成（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
+            context_info: 補助情報（名前、固有名詞など）を記載したテキスト
             
         Returns:
             (成功フラグ, 議事録データの辞書またはエラーメッセージ)
@@ -220,8 +231,8 @@ class AIHelper:
             return False, "音声ファイルが見つかりません。"
         
         try:
-            # まず音声をテキストに変換
-            success, transcribed_text = self.transcribe_audio_to_text(audio_file_path)
+            # まず音声をテキストに変換（補助情報を含める）
+            success, transcribed_text = self.transcribe_audio_to_text(audio_file_path, context_info)
             if not success:
                 return False, transcribed_text
             
@@ -499,12 +510,13 @@ class AIHelper:
         except Exception:
             return False
     
-    def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
+    def transcribe_audio_to_text(self, audio_file_path: str, context_info: Optional[str] = None) -> Tuple[bool, str]:
         """
         音声ファイルをテキストに変換（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
+            context_info: 補助情報（名前、固有名詞など）を記載したテキスト
             
         Returns:
             (成功フラグ, 変換されたテキストまたはエラーメッセージ)
@@ -546,6 +558,15 @@ class AIHelper:
 話し手の言葉をそのまま記録し、言いよどみや繰り返しも含めて正確に書き起こしてください。
 不要な編集は行わず、話された内容を忠実に記録してください。"""
             
+            # 補助情報がある場合はプロンプトに追加
+            if context_info and context_info.strip():
+                prompt += f"""
+
+以下の情報を参考にして、音声内の名前や固有名詞の認識精度を向上させてください：
+{context_info}
+
+これらの情報を参考にしながら、音声の内容を正確にテキストに変換してください。"""
+            
             # 音声認識を実行
             response = model.generate_content([prompt, audio_file_obj])
             
@@ -560,12 +581,13 @@ class AIHelper:
         except Exception as e:
             return False, f"音声認識エラー: {str(e)}"
     
-    def generate_meeting_minutes_from_audio(self, audio_file_path: str) -> Tuple[bool, Dict[str, str]]:
+    def generate_meeting_minutes_from_audio(self, audio_file_path: str, context_info: Optional[str] = None) -> Tuple[bool, Dict[str, str]]:
         """
         音声ファイルから朝礼議事録を生成（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
+            context_info: 補助情報（名前、固有名詞など）を記載したテキスト
             
         Returns:
             (成功フラグ, 議事録データの辞書またはエラーメッセージ)
@@ -577,8 +599,8 @@ class AIHelper:
             return False, "音声ファイルが見つかりません。"
         
         try:
-            # まず音声をテキストに変換
-            success, transcribed_text = self.transcribe_audio_to_text(audio_file_path)
+            # まず音声をテキストに変換（補助情報を含める）
+            success, transcribed_text = self.transcribe_audio_to_text(audio_file_path, context_info)
             if not success:
                 return False, transcribed_text
             
@@ -791,12 +813,13 @@ class AIHelper:
         except Exception:
             return False
     
-    def transcribe_audio_to_text(self, audio_file_path: str) -> Tuple[bool, str]:
+    def transcribe_audio_to_text(self, audio_file_path: str, context_info: Optional[str] = None) -> Tuple[bool, str]:
         """
         音声ファイルをテキストに変換（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
+            context_info: 補助情報（名前、固有名詞など）を記載したテキスト
             
         Returns:
             (成功フラグ, 変換されたテキストまたはエラーメッセージ)
@@ -838,6 +861,15 @@ class AIHelper:
 話し手の言葉をそのまま記録し、言いよどみや繰り返しも含めて正確に書き起こしてください。
 不要な編集は行わず、話された内容を忠実に記録してください。"""
             
+            # 補助情報がある場合はプロンプトに追加
+            if context_info and context_info.strip():
+                prompt += f"""
+
+以下の情報を参考にして、音声内の名前や固有名詞の認識精度を向上させてください：
+{context_info}
+
+これらの情報を参考にしながら、音声の内容を正確にテキストに変換してください。"""
+            
             # 音声認識を実行
             response = model.generate_content([prompt, audio_file_obj])
             
@@ -852,12 +884,13 @@ class AIHelper:
         except Exception as e:
             return False, f"音声認識エラー: {str(e)}"
     
-    def generate_meeting_minutes_from_audio(self, audio_file_path: str) -> Tuple[bool, Dict[str, str]]:
+    def generate_meeting_minutes_from_audio(self, audio_file_path: str, context_info: Optional[str] = None) -> Tuple[bool, Dict[str, str]]:
         """
         音声ファイルから朝礼議事録を生成（Gemini 3 Flash Preview使用）
         
         Args:
             audio_file_path: 音声ファイルのパス
+            context_info: 補助情報（名前、固有名詞など）を記載したテキスト
             
         Returns:
             (成功フラグ, 議事録データの辞書またはエラーメッセージ)
@@ -869,8 +902,8 @@ class AIHelper:
             return False, "音声ファイルが見つかりません。"
         
         try:
-            # まず音声をテキストに変換
-            success, transcribed_text = self.transcribe_audio_to_text(audio_file_path)
+            # まず音声をテキストに変換（補助情報を含める）
+            success, transcribed_text = self.transcribe_audio_to_text(audio_file_path, context_info)
             if not success:
                 return False, transcribed_text
             
