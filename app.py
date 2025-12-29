@@ -251,7 +251,7 @@ def render_sidebar():
         # ページ選択
         page = st.radio(
             "メニュー",
-            ["日報入力", "保存済み日報閲覧", "利用者マスタ管理", "設定"],
+            ["日報入力", "保存済み日報閲覧", "朝礼議事録", "利用者マスタ管理", "設定"],
             key="page_selector"
         )
         st.session_state.current_page = page
@@ -1533,6 +1533,205 @@ def render_saved_reports_viewer():
             st.error("日報ファイルの読み込みに失敗しました。")
 
 
+def render_morning_meeting():
+    """朝礼議事録画面の描画"""
+    st.markdown('<div class="main-header">📝 朝礼議事録</div>', unsafe_allow_html=True)
+    
+    # タブで入力と閲覧を分ける
+    tab1, tab2 = st.tabs(["📝 議事録入力", "📚 議事録閲覧"])
+    
+    with tab1:
+        st.markdown('<div class="section-header">📝 朝礼議事録入力</div>', unsafe_allow_html=True)
+        
+        with st.form("morning_meeting_form"):
+            meeting_date = st.date_input(
+                "日付 *",
+                value=date.today(),
+                key="meeting_date"
+            )
+            
+            st.markdown("#### 議題・内容")
+            agenda = st.text_area(
+                "議題・内容 *",
+                height=150,
+                key="meeting_agenda",
+                placeholder="朝礼で話し合った内容を記入してください"
+            )
+            
+            st.markdown("#### 決定事項")
+            decisions = st.text_area(
+                "決定事項",
+                height=120,
+                key="meeting_decisions",
+                placeholder="決定した事項があれば記入してください"
+            )
+            
+            st.markdown("#### 共有事項")
+            shared_items = st.text_area(
+                "共有事項",
+                height=120,
+                key="meeting_shared",
+                placeholder="スタッフ間で共有すべき事項を記入してください"
+            )
+            
+            st.markdown("#### その他メモ")
+            notes = st.text_area(
+                "その他メモ",
+                height=100,
+                key="meeting_notes",
+                placeholder="その他のメモがあれば記入してください"
+            )
+            
+            submitted = st.form_submit_button("💾 議事録を保存", use_container_width=True, type="primary")
+            
+            if submitted:
+                errors = []
+                if not agenda or not agenda.strip():
+                    errors.append("議題・内容を入力してください")
+                
+                if errors:
+                    for error in errors:
+                        st.error(error)
+                else:
+                    meeting_data = {
+                        "日付": meeting_date.isoformat(),
+                        "記入スタッフ名": st.session_state.staff_name,
+                        "議題・内容": agenda,
+                        "決定事項": decisions if decisions else "",
+                        "共有事項": shared_items if shared_items else "",
+                        "その他メモ": notes if notes else ""
+                    }
+                    
+                    if st.session_state.data_manager.save_morning_meeting(meeting_data):
+                        st.success("✅ 朝礼議事録を保存しました！")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error("保存に失敗しました。")
+    
+    with tab2:
+        st.markdown('<div class="section-header">📚 朝礼議事録一覧</div>', unsafe_allow_html=True)
+        
+        dm = st.session_state.data_manager
+        
+        # 日付でフィルタリング
+        col1, col2 = st.columns(2)
+        with col1:
+            filter_start_date = st.date_input(
+                "開始日",
+                value=None,
+                key="meeting_filter_start_date"
+            )
+        with col2:
+            filter_end_date = st.date_input(
+                "終了日",
+                value=None,
+                key="meeting_filter_end_date"
+            )
+        
+        # フィルタリング処理
+        start_date_str = filter_start_date.isoformat() if filter_start_date else None
+        end_date_str = filter_end_date.isoformat() if filter_end_date else None
+        meetings = dm.get_morning_meetings(start_date_str, end_date_str)
+        
+        if not meetings:
+            st.info("朝礼議事録が登録されていません。")
+        else:
+            st.markdown(f"**{len(meetings)}件の議事録が見つかりました**")
+            
+            # 議事録を選択
+            meeting_options = {}
+            for meeting in meetings:
+                meeting_date_str = meeting.get("日付", "")
+                created_at = meeting.get("created_at", "")
+                try:
+                    if meeting_date_str:
+                        date_obj = datetime.fromisoformat(meeting_date_str).date()
+                        date_display = date_obj.strftime('%Y年%m月%d日')
+                    else:
+                        date_display = "日付不明"
+                    
+                    if created_at:
+                        created_at_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        time_display = created_at_obj.strftime('%H:%M')
+                    else:
+                        time_display = ""
+                    
+                    display_name = f"{date_display} {time_display} - {meeting.get('記入スタッフ名', '不明')}"
+                    meeting_options[display_name] = meeting
+                except:
+                    display_name = f"議事録 - {meeting.get('記入スタッフ名', '不明')}"
+                    meeting_options[display_name] = meeting
+            
+            selected_display = st.selectbox(
+                "閲覧する議事録を選択してください",
+                options=list(meeting_options.keys()),
+                key="selected_meeting"
+            )
+            
+            if selected_display:
+                selected_meeting = meeting_options[selected_display]
+                
+                st.markdown("---")
+                st.markdown('<div class="section-header">📄 議事録内容</div>', unsafe_allow_html=True)
+                
+                # 議事録の内容を表示
+                meeting_date_str = selected_meeting.get("日付", "")
+                if meeting_date_str:
+                    try:
+                        date_obj = datetime.fromisoformat(meeting_date_str).date()
+                        st.markdown(f"### {date_obj.strftime('%Y年%m月%d日')} の朝礼議事録")
+                    except:
+                        st.markdown(f"### 朝礼議事録")
+                else:
+                    st.markdown(f"### 朝礼議事録")
+                
+                st.markdown("---")
+                
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    st.markdown(f"**記入スタッフ**: {selected_meeting.get('記入スタッフ名', '不明')}")
+                with col2:
+                    created_at = selected_meeting.get("created_at", "")
+                    if created_at:
+                        try:
+                            created_at_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                            st.markdown(f"**作成日時**: {created_at_obj.strftime('%Y年%m月%d日 %H:%M:%S')}")
+                        except:
+                            st.markdown(f"**作成日時**: {created_at}")
+                
+                st.markdown("---")
+                
+                st.markdown("#### 議題・内容")
+                st.markdown(selected_meeting.get("議題・内容", ""))
+                
+                if selected_meeting.get("決定事項"):
+                    st.markdown("---")
+                    st.markdown("#### 決定事項")
+                    st.markdown(selected_meeting.get("決定事項", ""))
+                
+                if selected_meeting.get("共有事項"):
+                    st.markdown("---")
+                    st.markdown("#### 共有事項")
+                    st.markdown(selected_meeting.get("共有事項", ""))
+                
+                if selected_meeting.get("その他メモ"):
+                    st.markdown("---")
+                    st.markdown("#### その他メモ")
+                    st.markdown(selected_meeting.get("その他メモ", ""))
+                
+                st.markdown("---")
+                
+                # 削除ボタン
+                if st.button("🗑️ この議事録を削除", use_container_width=True, type="secondary"):
+                    meeting_id = selected_meeting.get("created_at")
+                    if meeting_id and dm.delete_morning_meeting(meeting_id):
+                        st.success("✅ 議事録を削除しました")
+                        st.rerun()
+                    else:
+                        st.error("削除に失敗しました")
+
+
 def render_settings():
     """設定画面の描画"""
     st.markdown('<div class="main-header">⚙️ 設定</div>', unsafe_allow_html=True)
@@ -1723,6 +1922,8 @@ def main():
         render_saved_reports_viewer()
     elif st.session_state.current_page == "利用者マスタ管理":
         render_user_master()
+    elif st.session_state.current_page == "朝礼議事録":
+        render_morning_meeting()
     elif st.session_state.current_page == "設定":
         render_settings()
 

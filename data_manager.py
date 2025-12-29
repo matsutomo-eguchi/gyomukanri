@@ -31,6 +31,7 @@ class DataManager:
         self.staff_accounts_file = self.data_dir / "staff_accounts.json"
         self.reports_dir = self.data_dir / "reports"
         self.reports_dir.mkdir(exist_ok=True)
+        self.morning_meeting_file = self.data_dir / "morning_meetings.json"
         
         # 利用者マスタの初期化
         self._init_master_file()
@@ -38,6 +39,8 @@ class DataManager:
         self._init_tags_file()
         # スタッフアカウントの初期化
         self._init_staff_accounts_file()
+        # 朝礼議事録の初期化
+        self._init_morning_meeting_file()
     
     def _init_master_file(self):
         """利用者マスタファイルが存在しない場合、初期化"""
@@ -747,4 +750,105 @@ class DataManager:
                 return True
         
         return False
+    
+    def _init_morning_meeting_file(self):
+        """朝礼議事録ファイルが存在しない場合、初期化"""
+        if not self.morning_meeting_file.exists():
+            default_meetings = []
+            self._save_morning_meetings(default_meetings)
+    
+    def _load_morning_meetings(self) -> List[Dict]:
+        """朝礼議事録を読み込む"""
+        try:
+            with open(self.morning_meeting_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return []
+    
+    def _save_morning_meetings(self, meetings: List[Dict]):
+        """朝礼議事録を保存する"""
+        with open(self.morning_meeting_file, 'w', encoding='utf-8') as f:
+            json.dump(meetings, f, ensure_ascii=False, indent=2)
+    
+    def save_morning_meeting(self, meeting_data: Dict) -> bool:
+        """
+        朝礼議事録を保存
+        
+        Args:
+            meeting_data: 朝礼議事録データの辞書
+            
+        Returns:
+            成功した場合True
+        """
+        try:
+            meetings = self._load_morning_meetings()
+            
+            # タイムスタンプを追加
+            meeting_data["created_at"] = datetime.now().isoformat()
+            
+            # 新しい議事録を追加
+            meetings.append(meeting_data)
+            
+            # 日付順にソート（新しい順）
+            meetings.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            
+            self._save_morning_meetings(meetings)
+            return True
+        except Exception as e:
+            print(f"朝礼議事録保存エラー: {e}")
+            return False
+    
+    def get_morning_meetings(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict]:
+        """
+        朝礼議事録を取得
+        
+        Args:
+            start_date: 開始日（YYYY-MM-DD形式）
+            end_date: 終了日（YYYY-MM-DD形式）
+            
+        Returns:
+            朝礼議事録のリスト
+        """
+        meetings = self._load_morning_meetings()
+        
+        if start_date or end_date:
+            filtered_meetings = []
+            for meeting in meetings:
+                meeting_date = meeting.get("日付", "")
+                if isinstance(meeting_date, str):
+                    try:
+                        meeting_date_obj = datetime.fromisoformat(meeting_date).date()
+                        if start_date:
+                            start_date_obj = datetime.fromisoformat(start_date).date()
+                            if meeting_date_obj < start_date_obj:
+                                continue
+                        if end_date:
+                            end_date_obj = datetime.fromisoformat(end_date).date()
+                            if meeting_date_obj > end_date_obj:
+                                continue
+                        filtered_meetings.append(meeting)
+                    except:
+                        continue
+            return filtered_meetings
+        
+        return meetings
+    
+    def delete_morning_meeting(self, meeting_id: str) -> bool:
+        """
+        朝礼議事録を削除
+        
+        Args:
+            meeting_id: 削除する議事録のID（created_atのタイムスタンプ）
+            
+        Returns:
+            成功した場合True
+        """
+        try:
+            meetings = self._load_morning_meetings()
+            meetings = [m for m in meetings if m.get("created_at") != meeting_id]
+            self._save_morning_meetings(meetings)
+            return True
+        except Exception as e:
+            print(f"朝礼議事録削除エラー: {e}")
+            return False
 
