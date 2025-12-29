@@ -1,10 +1,17 @@
 """
 データ管理モジュール
 利用者マスタと日報データの永続化を担当
+
+データ保護について:
+- 既存データは絶対に上書きされません
+- 初期化処理はファイルが存在しない場合のみ実行されます
+- アプリ更新時も過去のデータは保持されます
+- データファイルは .gitignore で除外されているため、Gitにコミットされません
 """
 import json
 import os
 import hashlib
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
@@ -32,24 +39,30 @@ class DataManager:
         self.reports_dir = self.data_dir / "reports"
         self.reports_dir.mkdir(exist_ok=True)
         self.morning_meeting_file = self.data_dir / "morning_meetings.json"
+        self.backup_dir = self.data_dir / "backups"
+        self.backup_dir.mkdir(exist_ok=True)
         
-        # 利用者マスタの初期化
+        # 利用者マスタの初期化（既存データは保護）
         self._init_master_file()
-        # タグマスタの初期化
+        # タグマスタの初期化（既存データは保護）
         self._init_tags_file()
-        # スタッフアカウントの初期化
+        # スタッフアカウントの初期化（既存データは保護）
         self._init_staff_accounts_file()
-        # 朝礼議事録の初期化
+        # 朝礼議事録の初期化（既存データは保護）
         self._init_morning_meeting_file()
     
     def _init_master_file(self):
-        """利用者マスタファイルが存在しない場合、初期化"""
+        """利用者マスタファイルが存在しない場合、初期化（既存データは保護）"""
+        # 既存データを絶対に上書きしない
         if not self.master_file.exists():
             default_users = [
                 {"id": 1, "name": "サンプル児童1", "active": True},
                 {"id": 2, "name": "サンプル児童2", "active": True},
             ]
             self._save_master(default_users)
+        else:
+            # 既存データが存在する場合は、そのまま保持（上書きしない）
+            pass
     
     def _load_master(self) -> List[Dict]:
         """利用者マスタを読み込む"""
@@ -150,6 +163,7 @@ class DataManager:
     def save_daily_report(self, report_data: Dict) -> bool:
         """
         日報データを保存（CSVとMarkdown形式の両方）
+        既存データは保護され、新しいデータのみ追加される
         
         Args:
             report_data: 日報データの辞書
@@ -159,6 +173,7 @@ class DataManager:
         """
         try:
             # CSVファイルが存在する場合は読み込み、存在しない場合は新規作成
+            # 既存データは必ず保持される
             if self.report_file.exists():
                 df = pd.read_csv(self.report_file, encoding='utf-8')
             else:
@@ -167,11 +182,11 @@ class DataManager:
             # タイムスタンプを追加
             report_data["created_at"] = datetime.now().isoformat()
             
-            # 新しい行を追加
+            # 新しい行を追加（既存データは保持）
             new_row = pd.DataFrame([report_data])
             df = pd.concat([df, new_row], ignore_index=True)
             
-            # CSV形式で保存
+            # CSV形式で保存（既存データを含む）
             df.to_csv(self.report_file, index=False, encoding='utf-8')
             
             # Markdown形式でも保存（担当利用者名または送迎区分がある場合）
@@ -452,7 +467,8 @@ class DataManager:
         return df
     
     def _init_tags_file(self):
-        """タグマスタファイルが存在しない場合、初期化"""
+        """タグマスタファイルが存在しない場合、初期化（既存データは保護）"""
+        # 既存データを絶対に上書きしない
         if not self.tags_file.exists():
             default_tags = {
                 "learning": [
@@ -469,6 +485,9 @@ class DataManager:
                 ]
             }
             self._save_tags(default_tags)
+        else:
+            # 既存データが存在する場合は、そのまま保持（上書きしない）
+            pass
     
     def _load_tags(self) -> Dict[str, List[str]]:
         """タグマスタを読み込む"""
@@ -607,10 +626,14 @@ class DataManager:
             return False
     
     def _init_staff_accounts_file(self):
-        """スタッフアカウントファイルが存在しない場合、初期化"""
+        """スタッフアカウントファイルが存在しない場合、初期化（既存データは保護）"""
+        # 既存データを絶対に上書きしない
         if not self.staff_accounts_file.exists():
             default_accounts = []
             self._save_staff_accounts(default_accounts)
+        else:
+            # 既存データが存在する場合は、そのまま保持（上書きしない）
+            pass
     
     def _load_staff_accounts(self) -> List[Dict]:
         """スタッフアカウントを読み込む"""
@@ -752,10 +775,14 @@ class DataManager:
         return False
     
     def _init_morning_meeting_file(self):
-        """朝礼議事録ファイルが存在しない場合、初期化"""
+        """朝礼議事録ファイルが存在しない場合、初期化（既存データは保護）"""
+        # 既存データを絶対に上書きしない
         if not self.morning_meeting_file.exists():
             default_meetings = []
             self._save_morning_meetings(default_meetings)
+        else:
+            # 既存データが存在する場合は、そのまま保持（上書きしない）
+            pass
     
     def _load_morning_meetings(self) -> List[Dict]:
         """朝礼議事録を読み込む"""
@@ -850,5 +877,105 @@ class DataManager:
             return True
         except Exception as e:
             print(f"朝礼議事録削除エラー: {e}")
+            return False
+    
+    def create_backup(self) -> Optional[str]:
+        """
+        データファイルのバックアップを作成
+        
+        Returns:
+            バックアップディレクトリのパス（失敗時はNone）
+        """
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = self.backup_dir / f"backup_{timestamp}"
+            backup_path.mkdir(exist_ok=True)
+            
+            # すべてのデータファイルをバックアップ
+            data_files = [
+                self.master_file,
+                self.report_file,
+                self.tags_file,
+                self.config_file,
+                self.staff_accounts_file,
+                self.morning_meeting_file
+            ]
+            
+            for file_path in data_files:
+                if file_path.exists():
+                    shutil.copy2(file_path, backup_path / file_path.name)
+            
+            # reportsディレクトリもバックアップ
+            if self.reports_dir.exists():
+                backup_reports_dir = backup_path / "reports"
+                shutil.copytree(self.reports_dir, backup_reports_dir, dirs_exist_ok=True)
+            
+            return str(backup_path)
+        except Exception as e:
+            print(f"バックアップ作成エラー: {e}")
+            return None
+    
+    def get_backup_list(self) -> List[Dict]:
+        """
+        バックアップ一覧を取得
+        
+        Returns:
+            バックアップ情報のリスト
+        """
+        backups = []
+        if not self.backup_dir.exists():
+            return backups
+        
+        for backup_path in sorted(self.backup_dir.glob("backup_*"), reverse=True):
+            if backup_path.is_dir():
+                try:
+                    stat = backup_path.stat()
+                    backups.append({
+                        "path": str(backup_path),
+                        "name": backup_path.name,
+                        "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        "size": sum(f.stat().st_size for f in backup_path.rglob('*') if f.is_file())
+                    })
+                except Exception as e:
+                    print(f"バックアップ情報取得エラー ({backup_path}): {e}")
+        
+        return backups
+    
+    def restore_backup(self, backup_path: str) -> bool:
+        """
+        バックアップからデータを復元
+        
+        Args:
+            backup_path: バックアップディレクトリのパス
+            
+        Returns:
+            成功した場合True
+        """
+        try:
+            backup_dir = Path(backup_path)
+            if not backup_dir.exists() or not backup_dir.is_dir():
+                return False
+            
+            # 復元前に現在のデータをバックアップ
+            self.create_backup()
+            
+            # データファイルを復元
+            for file_name in ["users_master.json", "daily_reports.csv", "tags_master.json", 
+                            "config.json", "staff_accounts.json", "morning_meetings.json"]:
+                backup_file = backup_dir / file_name
+                if backup_file.exists():
+                    target_file = self.data_dir / file_name
+                    shutil.copy2(backup_file, target_file)
+            
+            # reportsディレクトリを復元
+            backup_reports_dir = backup_dir / "reports"
+            if backup_reports_dir.exists():
+                if self.reports_dir.exists():
+                    shutil.rmtree(self.reports_dir)
+                shutil.copytree(backup_reports_dir, self.reports_dir)
+            
+            return True
+        except Exception as e:
+            print(f"バックアップ復元エラー: {e}")
             return False
 
