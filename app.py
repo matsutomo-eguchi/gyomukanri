@@ -1970,8 +1970,11 @@ def render_settings():
     st.markdown("#### Gemini API キー設定")
     st.info("音声から朝礼議事録を作成する機能を使用するには、Gemini APIキーが必要です。")
     
-    current_gemini_key = st.session_state.ai_helper.gemini_api_key if hasattr(st.session_state.ai_helper, 'gemini_api_key') else ""
-    masked_gemini_key = "***" + current_gemini_key[-4:] if len(current_gemini_key) > 4 else ""
+    current_gemini_key = ""
+    if hasattr(st.session_state.ai_helper, 'gemini_api_key'):
+        key = st.session_state.ai_helper.gemini_api_key
+        current_gemini_key = key if isinstance(key, str) and key else ""
+    masked_gemini_key = "***" + current_gemini_key[-4:] if isinstance(current_gemini_key, str) and len(current_gemini_key) > 4 else ""
     
     if current_gemini_key:
         st.success(f"✅ Gemini APIキーが設定されています（末尾4桁: {masked_gemini_key}）")
