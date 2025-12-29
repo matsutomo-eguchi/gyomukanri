@@ -1644,6 +1644,16 @@ def render_morning_meeting():
         
         st.markdown("---")
         
+        # セッションステートの初期化（フォーム外で行う）
+        if "meeting_agenda" not in st.session_state:
+            st.session_state.meeting_agenda = ""
+        if "meeting_decisions" not in st.session_state:
+            st.session_state.meeting_decisions = ""
+        if "meeting_shared" not in st.session_state:
+            st.session_state.meeting_shared = ""
+        if "meeting_notes" not in st.session_state:
+            st.session_state.meeting_notes = ""
+        
         with st.form("morning_meeting_form"):
             meeting_date = st.date_input(
                 "日付 *",
@@ -1656,8 +1666,7 @@ def render_morning_meeting():
                 "議題・内容 *",
                 height=150,
                 key="meeting_agenda",
-                placeholder="朝礼で話し合った内容を記入してください",
-                value=st.session_state.get("meeting_agenda", "")
+                placeholder="朝礼で話し合った内容を記入してください"
             )
             
             st.markdown("#### 決定事項")
@@ -1665,8 +1674,7 @@ def render_morning_meeting():
                 "決定事項",
                 height=120,
                 key="meeting_decisions",
-                placeholder="決定した事項があれば記入してください",
-                value=st.session_state.get("meeting_decisions", "")
+                placeholder="決定した事項があれば記入してください"
             )
             
             st.markdown("#### 共有事項")
@@ -1674,8 +1682,7 @@ def render_morning_meeting():
                 "共有事項",
                 height=120,
                 key="meeting_shared",
-                placeholder="スタッフ間で共有すべき事項を記入してください",
-                value=st.session_state.get("meeting_shared", "")
+                placeholder="スタッフ間で共有すべき事項を記入してください"
             )
             
             st.markdown("#### その他メモ")
@@ -1683,8 +1690,7 @@ def render_morning_meeting():
                 "その他メモ",
                 height=100,
                 key="meeting_notes",
-                placeholder="その他のメモがあれば記入してください",
-                value=st.session_state.get("meeting_notes", "")
+                placeholder="その他のメモがあれば記入してください"
             )
             
             submitted = st.form_submit_button("💾 議事録を保存", use_container_width=True, type="primary")
