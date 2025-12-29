@@ -1568,17 +1568,30 @@ def render_morning_meeting():
         
         if uploaded_audio is not None:
             # Gemini APIキーの確認
-            gemini_api_key = os.getenv("GEMINI_API_KEY")
-            if hasattr(st, 'secrets') and hasattr(st.secrets, 'get'):
+            # まず、ai_helperに既に設定されているかチェック
+            gemini_api_key = None
+            if hasattr(st.session_state.ai_helper, 'gemini_api_key'):
+                key = st.session_state.ai_helper.gemini_api_key
+                if isinstance(key, str) and key.strip():
+                    gemini_api_key = key
+            
+            # なければ環境変数から取得
+            if not gemini_api_key:
+                gemini_api_key = os.getenv("GEMINI_API_KEY", None)
+            
+            # なければStreamlit Secretsから取得
+            if not gemini_api_key and hasattr(st, 'secrets') and hasattr(st.secrets, 'get'):
                 try:
-                    gemini_api_key = gemini_api_key or st.secrets.get("GEMINI_API_KEY", None)
+                    gemini_api_key = st.secrets.get("GEMINI_API_KEY", None)
                 except:
                     pass
             
+            # なければdata_managerから取得
             if not gemini_api_key:
-                st.warning("⚠️ Gemini APIキーが設定されていません。設定画面でAPIキーを設定してください。")
-            else:
-                # AIHelperにGemini APIキーを設定
+                gemini_api_key = st.session_state.data_manager.get_gemini_api_key()
+            
+            # AIHelperにGemini APIキーを設定
+            if gemini_api_key:
                 if not hasattr(st.session_state.ai_helper, 'gemini_api_key') or not st.session_state.ai_helper.gemini_api_key:
                     st.session_state.ai_helper.gemini_api_key = gemini_api_key
                     try:
@@ -1586,6 +1599,11 @@ def render_morning_meeting():
                         genai.configure(api_key=gemini_api_key)
                     except ImportError:
                         st.error("google-generativeaiパッケージがインストールされていません。requirements.txtからインストールしてください。")
+            
+            # 最終的にis_gemini_available()で確認
+            if not st.session_state.ai_helper.is_gemini_available():
+                st.warning("⚠️ Gemini APIキーが設定されていません。設定画面でAPIキーを設定してください。")
+            else:
                 
                 if st.button("🎤 音声から議事録を生成", use_container_width=True, type="primary"):
                     with st.spinner("音声を解析中...（数分かかる場合があります）"):
