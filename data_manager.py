@@ -151,6 +151,10 @@ class DataManager:
                     if "created_at" not in user:
                         user["created_at"] = datetime.now().isoformat()
                         updated = True
+                    # 区分フィールドが存在しない場合はデフォルト値を設定
+                    if "classification" not in user:
+                        user["classification"] = "放課後等デイサービス"
+                        updated = True
                 if updated:
                     self._save_master(users)
             except Exception:
@@ -264,13 +268,24 @@ class DataManager:
         # 既存データを絶対に上書きしない
         if not self.master_file.exists():
             default_users = [
-                {"id": 1, "name": "サンプル児童1", "active": True},
-                {"id": 2, "name": "サンプル児童2", "active": True},
+                {"id": 1, "name": "サンプル児童1", "classification": "放課後等デイサービス", "active": True},
+                {"id": 2, "name": "サンプル児童2", "classification": "児童発達支援", "active": True},
             ]
             self._save_master(default_users)
         else:
             # 既存データが存在する場合は、そのまま保持（上書きしない）
-            pass
+            # ただし、区分フィールドがない場合は追加する
+            try:
+                users = self._load_master()
+                updated = False
+                for user in users:
+                    if "classification" not in user:
+                        user["classification"] = "放課後等デイサービス"
+                        updated = True
+                if updated:
+                    self._save_master(users)
+            except Exception:
+                pass  # エラーが発生しても既存データを保護
     
     def _load_master(self) -> List[Dict]:
         """利用者マスタを読み込む"""
@@ -294,18 +309,24 @@ class DataManager:
         """全利用者情報を取得"""
         return self._load_master()
     
-    def add_user(self, name: str) -> bool:
+    def add_user(self, name: str, classification: str = "放課後等デイサービス") -> bool:
         """
         新しい利用者を追加
         
         Args:
             name: 利用者名
+            classification: 利用者区分（"放課後等デイサービス"または"児童発達支援"）
             
         Returns:
             成功した場合True
         """
         if not name or not name.strip():
             return False
+        
+        # 区分のバリデーション
+        valid_classifications = ["放課後等デイサービス", "児童発達支援"]
+        if classification not in valid_classifications:
+            classification = "放課後等デイサービス"  # デフォルト値
         
         users = self._load_master()
         # 重複チェック
@@ -317,6 +338,7 @@ class DataManager:
         new_user = {
             "id": max_id + 1,
             "name": name.strip(),
+            "classification": classification,
             "active": True,
             "created_at": datetime.now().isoformat()
         }
