@@ -8,12 +8,17 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 try:
     from reportlab.lib.units import mm, pt
-except ImportError:
+except (ImportError, AttributeError):
     # ReportLabのバージョンによっては直接インポートできない場合があるため、
     # モジュールをインポートして使用する
-    import reportlab.lib.units as units
-    mm = units.mm
-    pt = units.pt
+    try:
+        import reportlab.lib.units as units
+        mm = getattr(units, 'mm', 2.834645669291339)  # 1mm = 2.834645669291339 points
+        pt = getattr(units, 'pt', 1.0)  # 1pt = 1.0 point
+    except (ImportError, AttributeError):
+        # フォールバック: 標準的な値を直接定義
+        mm = 2.834645669291339  # 1mm = 2.834645669291339 points
+        pt = 1.0  # 1pt = 1.0 point
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Table, TableStyle, Paragraph
