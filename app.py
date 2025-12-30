@@ -6,6 +6,7 @@ import streamlit as st
 import os
 from datetime import date, datetime, time
 from typing import Dict, List, Optional
+from pathlib import Path
 import pandas as pd
 import tempfile
 
@@ -59,6 +60,19 @@ st.markdown("""
 # セッション状態の初期化
 if 'data_manager' not in st.session_state:
     st.session_state.data_manager = DataManager()
+    
+    # データ保護の確認と警告表示
+    data_dir = Path("data")
+    if data_dir.exists():
+        # 既存データが存在する場合、保護されていることを確認
+        protection_marker = data_dir / ".data_protected"
+        if protection_marker.exists():
+            # データ保護が有効になっていることを確認（初回のみ表示）
+            if 'data_protection_notified' not in st.session_state:
+                st.session_state.data_protection_notified = True
+                # サイドバーに情報を表示（初回のみ）
+                with st.sidebar:
+                    st.info("✅ データ保護が有効です。コード更新時も記録は保持されます。")
 
 if 'ai_helper' not in st.session_state:
     # APIキーの取得（優先順位: 環境変数 > Streamlit Secrets > 保存された設定）
