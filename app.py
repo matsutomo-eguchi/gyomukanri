@@ -1371,7 +1371,7 @@ def render_user_master():
     # 新規追加
     st.markdown('<div class="section-header">➕ 新規利用者追加</div>', unsafe_allow_html=True)
     with st.form("add_user_form"):
-        col1, col2 = st.columns([3, 1])
+        col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
             new_user_name = st.text_input(
                 "利用者名",
@@ -1379,6 +1379,13 @@ def render_user_master():
                 placeholder="児童の名前を入力してください"
             )
         with col2:
+            new_user_classification = st.selectbox(
+                "利用者区分",
+                options=["放課後等デイサービス", "児童発達支援"],
+                key="new_user_classification",
+                help="放課後等デイサービス（放デイ）または児童発達支援（児発）を選択してください"
+            )
+        with col3:
             st.markdown("<br>", unsafe_allow_html=True)
             add_submitted = st.form_submit_button("追加", use_container_width=True)
         
@@ -1386,8 +1393,8 @@ def render_user_master():
             if not new_user_name or not new_user_name.strip():
                 st.error("利用者名を入力してください")
             else:
-                if dm.add_user(new_user_name):
-                    st.success(f"✅ {new_user_name} を追加しました！")
+                if dm.add_user(new_user_name, new_user_classification):
+                    st.success(f"✅ {new_user_name}（{new_user_classification}）を追加しました！")
                     st.rerun()
                 else:
                     st.error("追加に失敗しました。既に登録されている可能性があります。")
@@ -1409,7 +1416,12 @@ def render_user_master():
         if active_users:
             st.markdown("#### アクティブな利用者")
             df_active = pd.DataFrame([
-                {"ID": u["id"], "名前": u["name"], "登録日": u.get("created_at", "-")[:10]}
+                {
+                    "ID": u["id"], 
+                    "名前": u["name"], 
+                    "区分": u.get("classification", "放課後等デイサービス"),
+                    "登録日": u.get("created_at", "-")[:10] if u.get("created_at") else "-"
+                }
                 for u in active_users
             ])
             st.dataframe(df_active, use_container_width=True, hide_index=True)
@@ -1434,7 +1446,12 @@ def render_user_master():
         if inactive_users:
             st.markdown("#### 無効化された利用者")
             df_inactive = pd.DataFrame([
-                {"ID": u["id"], "名前": u["name"], "削除日": u.get("deleted_at", "-")[:10]}
+                {
+                    "ID": u["id"], 
+                    "名前": u["name"], 
+                    "区分": u.get("classification", "放課後等デイサービス"),
+                    "削除日": u.get("deleted_at", "-")[:10] if u.get("deleted_at") else "-"
+                }
                 for u in inactive_users
             ])
             st.dataframe(df_inactive, use_container_width=True, hide_index=True)
