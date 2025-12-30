@@ -1133,6 +1133,82 @@ class DataManager:
             print(f"朝礼議事録削除エラー: {e}")
             return False
     
+    def format_morning_meeting_as_markdown(self, meeting_data: Dict) -> str:
+        """
+        朝礼議事録データをMarkdown形式の文字列に変換
+        
+        Args:
+            meeting_data: 朝礼議事録データの辞書
+            
+        Returns:
+            Markdown形式の文字列
+        """
+        lines = []
+        
+        # タイトル
+        meeting_date_str = meeting_data.get("日付", "")
+        if meeting_date_str:
+            try:
+                date_obj = datetime.fromisoformat(meeting_date_str).date()
+                lines.append(f"# {date_obj.strftime('%Y年%m月%d日')} の朝礼議事録")
+            except:
+                lines.append("# 朝礼議事録")
+        else:
+            lines.append("# 朝礼議事録")
+        
+        lines.append("")
+        
+        # 基本情報
+        lines.append("## 基本情報")
+        lines.append("")
+        if "日付" in meeting_data:
+            try:
+                date_obj = datetime.fromisoformat(meeting_data["日付"]).date()
+                lines.append(f"- **日付**: {date_obj.strftime('%Y年%m月%d日')}")
+            except:
+                lines.append(f"- **日付**: {meeting_data['日付']}")
+        if "記入スタッフ名" in meeting_data:
+            lines.append(f"- **記入スタッフ名**: {meeting_data['記入スタッフ名']}")
+        if "created_at" in meeting_data:
+            created_at = meeting_data['created_at']
+            if isinstance(created_at, str):
+                try:
+                    dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    lines.append(f"- **作成日時**: {dt.strftime('%Y年%m月%d日 %H:%M:%S')}")
+                except:
+                    lines.append(f"- **作成日時**: {created_at}")
+        lines.append("")
+        
+        # 議題・内容
+        if "議題・内容" in meeting_data and meeting_data["議題・内容"]:
+            lines.append("## 議題・内容")
+            lines.append("")
+            lines.append(meeting_data["議題・内容"])
+            lines.append("")
+        
+        # 決定事項
+        if "決定事項" in meeting_data and meeting_data["決定事項"]:
+            lines.append("## 決定事項")
+            lines.append("")
+            lines.append(meeting_data["決定事項"])
+            lines.append("")
+        
+        # 共有事項
+        if "共有事項" in meeting_data and meeting_data["共有事項"]:
+            lines.append("## 共有事項")
+            lines.append("")
+            lines.append(meeting_data["共有事項"])
+            lines.append("")
+        
+        # その他メモ
+        if "その他メモ" in meeting_data and meeting_data["その他メモ"]:
+            lines.append("## その他メモ")
+            lines.append("")
+            lines.append(meeting_data["その他メモ"])
+            lines.append("")
+        
+        return "\n".join(lines)
+    
     def create_backup(self) -> Optional[str]:
         """
         データファイルのバックアップを作成
