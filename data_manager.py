@@ -45,6 +45,7 @@ class DataManager:
         self.reports_dir = self.data_dir / "reports"
         self.reports_dir.mkdir(exist_ok=True)
         self.morning_meeting_file = self.data_dir / "morning_meetings.json"
+        self.daily_users_file = self.data_dir / "daily_users.json"
         self.backup_dir = self.data_dir / "backups"
         self.backup_dir.mkdir(exist_ok=True)
         self.version_file = self.data_dir / ".schema_version"
@@ -66,6 +67,8 @@ class DataManager:
         self._init_staff_accounts_file()
         # 朝礼議事録の初期化（既存データは保護）
         self._init_morning_meeting_file()
+        # 日別利用者記録の初期化（既存データは保護）
+        self._init_daily_users_file()
     
     def _ensure_data_directory_protected(self):
         """
@@ -174,6 +177,7 @@ class DataManager:
             self.tags_file.exists() or
             self.staff_accounts_file.exists() or
             self.morning_meeting_file.exists() or
+            self.daily_users_file.exists() or
             (self.reports_dir.exists() and list(self.reports_dir.glob("*.md")))
         )
         
@@ -213,6 +217,7 @@ class DataManager:
             self.tags_file,
             self.staff_accounts_file,
             self.morning_meeting_file,
+            self.daily_users_file,
             self.config_file
         ]
         
@@ -1292,6 +1297,67 @@ class DataManager:
         
         return "\n".join(lines)
     
+    def _init_daily_users_file(self):
+        """日別利用者記録ファイルが存在しない場合、初期化（既存データは保護）"""
+        # 既存データを絶対に上書きしない
+        if not self.daily_users_file.exists():
+            default_daily_users = {}
+            self._save_daily_users(default_daily_users)
+        else:
+            # 既存データが存在する場合は、そのまま保持（上書きしない）
+            pass
+    
+    def _load_daily_users(self) -> Dict[str, List[str]]:
+        """日別利用者記録を読み込む"""
+        try:
+            with open(self.daily_users_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return {}
+    
+    def _save_daily_users(self, daily_users: Dict[str, List[str]]):
+        """日別利用者記録を保存する"""
+        with open(self.daily_users_file, 'w', encoding='utf-8') as f:
+            json.dump(daily_users, f, ensure_ascii=False, indent=2)
+    
+    def save_daily_users(self, target_date: str, user_names: List[str]) -> bool:
+        """
+        その日の利用者を保存
+        
+        Args:
+            target_date: 対象日（YYYY-MM-DD形式）
+            user_names: 利用者名のリスト
+            
+        Returns:
+            成功した場合True
+        """
+        try:
+            daily_users = self._load_daily_users()
+            # 日付をキーとして利用者名のリストを保存
+            daily_users[target_date] = user_names
+            self._save_daily_users(daily_users)
+            return True
+        except Exception as e:
+            print(f"日別利用者記録保存エラー: {e}")
+            return False
+    
+    def get_daily_users(self, target_date: str) -> List[str]:
+        """
+        その日の利用者一覧を取得
+        
+        Args:
+            target_date: 対象日（YYYY-MM-DD形式）
+            
+        Returns:
+            利用者名のリスト
+        """
+        try:
+            daily_users = self._load_daily_users()
+            return daily_users.get(target_date, [])
+        except Exception as e:
+            print(f"日別利用者記録取得エラー: {e}")
+            return []
+    
     def create_backup(self) -> Optional[str]:
         """
         データファイルのバックアップを作成
@@ -1313,6 +1379,7 @@ class DataManager:
                 self.config_file,
                 self.staff_accounts_file,
                 self.morning_meeting_file,
+                self.daily_users_file,
                 self.version_file  # スキーマバージョンファイルも含める
             ]
             
@@ -1405,7 +1472,7 @@ class DataManager:
             
             # データファイルを復元
             for file_name in ["users_master.json", "daily_reports.csv", "tags_master.json", 
-                            "config.json", "staff_accounts.json", "morning_meetings.json"]:
+                            "config.json", "staff_accounts.json", "morning_meetings.json", "daily_users.json"]:
                 backup_file = backup_dir / file_name
                 if backup_file.exists():
                     target_file = self.data_dir / file_name
