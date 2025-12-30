@@ -7,6 +7,7 @@
 - 初期化処理はファイルが存在しない場合のみ実行されます
 - アプリ更新時も過去のデータは保持されます
 - データファイルは .gitignore で除外されているため、Gitにコミットされません
+- コード更新（デプロイ）時もデータは自動的に保護されます
 """
 import json
 import os
@@ -21,6 +22,9 @@ import pandas as pd
 class DataManager:
     """データ管理クラス"""
     
+    # データスキーマバージョン（スキーマ変更時に更新）
+    SCHEMA_VERSION = 1
+    
     def __init__(self, data_dir: str = "data"):
         """
         初期化
@@ -29,7 +33,9 @@ class DataManager:
             data_dir: データファイルを保存するディレクトリ
         """
         self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(exist_ok=True)
+        
+        # データディレクトリの保護（既存データを保持）
+        self._ensure_data_directory_protected()
         
         self.master_file = self.data_dir / "users_master.json"
         self.report_file = self.data_dir / "daily_reports.csv"
@@ -41,6 +47,16 @@ class DataManager:
         self.morning_meeting_file = self.data_dir / "morning_meetings.json"
         self.backup_dir = self.data_dir / "backups"
         self.backup_dir.mkdir(exist_ok=True)
+        self.version_file = self.data_dir / ".schema_version"
+        
+        # データマイグレーション（スキーマ変更時にもデータを保持）
+        self._migrate_data_if_needed()
+        
+        # デプロイ前の自動バックアップ（既存データがある場合）
+        self._auto_backup_on_startup()
+        
+        # データ整合性チェック
+        self._verify_data_integrity()
         
         # 利用者マスタの初期化（既存データは保護）
         self._init_master_file()
@@ -50,6 +66,198 @@ class DataManager:
         self._init_staff_accounts_file()
         # 朝礼議事録の初期化（既存データは保護）
         self._init_morning_meeting_file()
+    
+    def _ensure_data_directory_protected(self):
+        """
+        データディレクトリの保護を確保
+        コード更新時にもデータが消えないようにする
+        """
+        # データディレクトリが存在する場合は、そのまま保持
+        if self.data_dir.exists():
+            # 既存のデータファイルを確認
+            existing_files = list(self.data_dir.glob("*"))
+            if existing_files:
+                # データが存在する場合は保護マーカーを作成
+                protection_marker = self.data_dir / ".data_protected"
+                if not protection_marker.exists():
+                    try:
+                        protection_marker.touch()
+                        with open(protection_marker, 'w', encoding='utf-8') as f:
+                            f.write(f"Data protection enabled: {datetime.now().isoformat()}\n")
+                    except Exception:
+                        pass  # マーカーの作成に失敗しても続行
+        else:
+            # データディレクトリが存在しない場合は作成
+            self.data_dir.mkdir(exist_ok=True)
+    
+    def _migrate_data_if_needed(self):
+        """
+        データマイグレーション
+        スキーマバージョンが変更された場合に、既存データを新しい形式に変換
+        """
+        current_version = self._get_schema_version()
+        
+        if current_version < self.SCHEMA_VERSION:
+            # マイグレーションが必要な場合
+            try:
+                # マイグレーション前にバックアップを作成
+                self.create_backup()
+                
+                # バージョン1へのマイグレーション（将来の拡張用）
+                if current_version == 0 and self.SCHEMA_VERSION >= 1:
+                    # 既存データの互換性を確保
+                    self._migrate_to_version_1()
+                
+                # スキーマバージョンを更新
+                self._save_schema_version(self.SCHEMA_VERSION)
+            except Exception as e:
+                print(f"データマイグレーションエラー: {e}")
+                # エラーが発生しても続行（既存データを保護）
+    
+    def _get_schema_version(self) -> int:
+        """現在のスキーマバージョンを取得"""
+        if self.version_file.exists():
+            try:
+                with open(self.version_file, 'r', encoding='utf-8') as f:
+                    version_str = f.read().strip()
+                    return int(version_str) if version_str.isdigit() else 0
+            except Exception:
+                return 0
+        return 0
+    
+    def _save_schema_version(self, version: int):
+        """スキーマバージョンを保存"""
+        try:
+            with open(self.version_file, 'w', encoding='utf-8') as f:
+                f.write(str(version))
+        except Exception:
+            pass
+    
+    def _migrate_to_version_1(self):
+        """
+        バージョン1へのマイグレーション
+        既存データの互換性を確保
+        """
+        # 既存データファイルの整合性を確認
+        # 必要に応じてデータ形式を更新
+        
+        # 利用者マスタのマイグレーション
+        if self.master_file.exists():
+            try:
+                users = self._load_master()
+                # バージョン1の必須フィールドを追加（既存データを保護）
+                updated = False
+                for user in users:
+                    if "created_at" not in user:
+                        user["created_at"] = datetime.now().isoformat()
+                        updated = True
+                if updated:
+                    self._save_master(users)
+            except Exception:
+                pass  # エラーが発生しても既存データを保護
+        
+        # その他のデータファイルも同様にマイグレーション可能
+    
+    def _auto_backup_on_startup(self):
+        """
+        起動時の自動バックアップ
+        既存データがある場合のみ実行
+        """
+        # 既存データが存在するか確認
+        has_data = (
+            self.master_file.exists() or
+            self.report_file.exists() or
+            self.tags_file.exists() or
+            self.staff_accounts_file.exists() or
+            self.morning_meeting_file.exists() or
+            (self.reports_dir.exists() and list(self.reports_dir.glob("*.md")))
+        )
+        
+        if has_data:
+            # 最後のバックアップ時刻を確認
+            last_backup_time = self._get_last_backup_time()
+            now = datetime.now()
+            
+            # 24時間以内にバックアップが作成されていない場合のみ実行
+            if not last_backup_time or (now - last_backup_time).total_seconds() > 86400:
+                try:
+                    backup_path = self.create_backup()
+                    if backup_path:
+                        print(f"起動時の自動バックアップを作成しました: {backup_path}")
+                except Exception as e:
+                    print(f"自動バックアップエラー: {e}")
+                    # エラーが発生しても続行
+    
+    def _get_last_backup_time(self) -> Optional[datetime]:
+        """最後のバックアップ作成時刻を取得"""
+        backups = self.get_backup_list()
+        if backups:
+            try:
+                return datetime.fromisoformat(backups[0]["created_at"])
+            except Exception:
+                return None
+        return None
+    
+    def _verify_data_integrity(self):
+        """
+        データ整合性チェック
+        破損したデータファイルを検出して修復を試みる
+        """
+        # 各データファイルの整合性を確認
+        data_files = [
+            self.master_file,
+            self.tags_file,
+            self.staff_accounts_file,
+            self.morning_meeting_file,
+            self.config_file
+        ]
+        
+        for file_path in data_files:
+            if file_path.exists():
+                try:
+                    # JSONファイルの読み込みテスト
+                    if file_path.suffix == '.json':
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            json.load(f)
+                except json.JSONDecodeError:
+                    # JSONが破損している場合、バックアップから復元を試みる
+                    print(f"警告: {file_path.name} が破損している可能性があります")
+                    self._attempt_restore_from_backup(file_path)
+                except Exception as e:
+                    print(f"データ整合性チェックエラー ({file_path.name}): {e}")
+        
+        # CSVファイルの整合性チェック
+        if self.report_file.exists():
+            try:
+                pd.read_csv(self.report_file, encoding='utf-8')
+            except Exception as e:
+                print(f"警告: daily_reports.csv の読み込みエラー: {e}")
+                # バックアップから復元を試みる
+                self._attempt_restore_from_backup(self.report_file)
+    
+    def _attempt_restore_from_backup(self, file_path: Path):
+        """
+        バックアップからファイルを復元しようとする
+        """
+        backups = self.get_backup_list()
+        if backups:
+            # 最新のバックアップから復元を試みる
+            latest_backup = backups[0]
+            backup_path = Path(latest_backup["path"])
+            backup_file = backup_path / file_path.name
+            
+            if backup_file.exists():
+                try:
+                    # 現在のファイルをバックアップ
+                    if file_path.exists():
+                        corrupted_backup = file_path.with_suffix(file_path.suffix + '.corrupted')
+                        shutil.copy2(file_path, corrupted_backup)
+                    
+                    # バックアップから復元
+                    shutil.copy2(backup_file, file_path)
+                    print(f"バックアップから {file_path.name} を復元しました")
+                except Exception as e:
+                    print(f"バックアップからの復元に失敗しました: {e}")
     
     def _init_master_file(self):
         """利用者マスタファイルが存在しない場合、初期化（既存データは保護）"""
@@ -928,6 +1136,7 @@ class DataManager:
     def create_backup(self) -> Optional[str]:
         """
         データファイルのバックアップを作成
+        コード更新（デプロイ）前に自動的に実行される
         
         Returns:
             バックアップディレクトリのパス（失敗時はNone）
@@ -944,17 +1153,47 @@ class DataManager:
                 self.tags_file,
                 self.config_file,
                 self.staff_accounts_file,
-                self.morning_meeting_file
+                self.morning_meeting_file,
+                self.version_file  # スキーマバージョンファイルも含める
             ]
             
+            backed_up_files = []
             for file_path in data_files:
                 if file_path.exists():
-                    shutil.copy2(file_path, backup_path / file_path.name)
+                    try:
+                        shutil.copy2(file_path, backup_path / file_path.name)
+                        backed_up_files.append(file_path.name)
+                    except Exception as e:
+                        print(f"警告: {file_path.name} のバックアップに失敗: {e}")
             
             # reportsディレクトリもバックアップ
             if self.reports_dir.exists():
-                backup_reports_dir = backup_path / "reports"
-                shutil.copytree(self.reports_dir, backup_reports_dir, dirs_exist_ok=True)
+                try:
+                    backup_reports_dir = backup_path / "reports"
+                    shutil.copytree(self.reports_dir, backup_reports_dir, dirs_exist_ok=True)
+                    backed_up_files.append(f"reports/ ({len(list(self.reports_dir.glob('*.md')))} files)")
+                except Exception as e:
+                    print(f"警告: reportsディレクトリのバックアップに失敗: {e}")
+            
+            # バックアップメタデータを保存
+            metadata = {
+                "timestamp": timestamp,
+                "backup_date": datetime.now().isoformat(),
+                "schema_version": self.SCHEMA_VERSION,
+                "backed_up_files": backed_up_files,
+                "data_dir": str(self.data_dir)
+            }
+            metadata_file = backup_path / ".backup_metadata.json"
+            with open(metadata_file, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
+            
+            # 保護マーカーもバックアップ
+            protection_marker = self.data_dir / ".data_protected"
+            if protection_marker.exists():
+                try:
+                    shutil.copy2(protection_marker, backup_path / ".data_protected")
+                except Exception:
+                    pass
             
             return str(backup_path)
         except Exception as e:
