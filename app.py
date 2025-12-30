@@ -277,7 +277,7 @@ def render_sidebar():
         # ページ選択
         page = st.radio(
             "メニュー",
-            ["日報入力", "保存済み日報閲覧", "朝礼議事録", "利用者マスタ管理", "設定"],
+            ["日報入力", "保存済み日報閲覧", "朝礼議事録", "日別利用者記録", "利用者マスタ管理", "設定"],
             key="page_selector"
         )
         st.session_state.current_page = page
@@ -2083,6 +2083,187 @@ def render_morning_meeting():
                                 st.rerun()
 
 
+def render_daily_users_management():
+    """日別利用者記録管理画面の描画"""
+    st.markdown('<div class="main-header">📅 日別利用者記録</div>', unsafe_allow_html=True)
+    
+    dm = st.session_state.data_manager
+    
+    # 日付選択セクション
+    st.markdown('<div class="section-header">📅 日付選択</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        selected_date = st.date_input(
+            "日付を選択",
+            value=date.today(),
+            key="daily_users_date"
+        )
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("📅 今日の日付に戻る", use_container_width=True):
+            st.session_state.daily_users_date = date.today()
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # 選択した日付の利用者記録を表示・編集
+    st.markdown('<div class="section-header">👥 利用者記録</div>', unsafe_allow_html=True)
+    
+    registered_users = dm.get_active_users()
+    
+    if not registered_users:
+        st.warning("⚠️ 利用者が登録されていません。先に「利用者マスタ管理」で利用者を追加してください。")
+        return
+    
+    # 選択した日付の利用者記録を取得
+    date_str = selected_date.isoformat()
+    current_users = dm.get_daily_users(date_str)
+    
+    # 利用者選択
+    selected_users = st.multiselect(
+        "利用者を選択",
+        options=registered_users,
+        default=current_users,
+        key=f"daily_users_selection_{date_str}",
+        help="その日の利用者を選択してください"
+    )
+    
+    # 選択した利用者の一覧を表示
+    if selected_users:
+        st.markdown("**選択中の利用者:**")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            for idx, user_name in enumerate(selected_users, 1):
+                st.markdown(f"{idx}. {user_name}")
+        with col2:
+            st.metric("合計", f"{len(selected_users)}名")
+        
+        # 保存・削除ボタン
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button("💾 保存", use_container_width=True, type="primary"):
+                if dm.save_daily_users(date_str, selected_users):
+                    st.success(f"✅ {len(selected_users)}名の利用者を記録しました")
+                    st.rerun()
+                else:
+                    st.error("保存に失敗しました")
+        
+        with col2:
+            if current_users and st.button("🗑️ 削除", use_container_width=True, type="secondary"):
+                if dm.delete_daily_users(date_str):
+                    st.success("✅ 利用者記録を削除しました")
+                    st.rerun()
+                else:
+                    st.error("削除に失敗しました")
+        
+        with col3:
+            if st.button("📋 コピー", use_container_width=True):
+                user_list_text = "\n".join([f"{idx}. {name}" for idx, name in enumerate(selected_users, 1)])
+                st.code(user_list_text, language=None)
+                st.info("上記のリストをコピーできます")
+    else:
+        st.info("利用者を選択してください")
+        
+        # 既存の記録がある場合は表示
+        if current_users:
+            st.markdown("**現在の記録:**")
+            for idx, user_name in enumerate(current_users, 1):
+                st.markdown(f"{idx}. {user_name}")
+            st.markdown(f"**合計: {len(current_users)}名**")
+    
+    st.markdown("---")
+    
+    # 日別利用者記録一覧
+    st.markdown('<div class="section-header">📋 日別利用者記録一覧</div>', unsafe_allow_html=True)
+    
+    all_daily_users = dm.get_all_daily_users()
+    
+    if not all_daily_users:
+        st.info("利用者記録がありません。")
+    else:
+        # 日付でソート（新しい順）
+        sorted_dates = sorted(all_daily_users.keys(), reverse=True)
+        
+        # フィルタリング
+        col1, col2 = st.columns(2)
+        with col1:
+            filter_start_date = st.date_input(
+                "開始日",
+                value=None,
+                key="daily_users_filter_start"
+            )
+        with col2:
+            filter_end_date = st.date_input(
+                "終了日",
+                value=None,
+                key="daily_users_filter_end"
+            )
+        
+        # フィルタリング処理
+        filtered_dates = sorted_dates
+        if filter_start_date:
+            filter_start_str = filter_start_date.isoformat()
+            filtered_dates = [d for d in filtered_dates if d >= filter_start_str]
+        if filter_end_date:
+            filter_end_str = filter_end_date.isoformat()
+            filtered_dates = [d for d in filtered_dates if d <= filter_end_str]
+        
+        if not filtered_dates:
+            st.warning("該当する記録がありません。")
+        else:
+            st.markdown(f"**{len(filtered_dates)}件の記録が見つかりました**")
+            
+            # 一覧表示
+            for date_key in filtered_dates:
+                users_list = all_daily_users[date_key]
+                try:
+                    date_obj = datetime.fromisoformat(date_key).date()
+                    date_display = date_obj.strftime('%Y年%m月%d日 (%A)')
+                except:
+                    date_display = date_key
+                
+                with st.expander(f"📅 {date_display} - {len(users_list)}名", expanded=(date_key == date_str)):
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    with col1:
+                        for idx, user_name in enumerate(users_list, 1):
+                            st.markdown(f"{idx}. {user_name}")
+                    with col2:
+                        st.metric("人数", f"{len(users_list)}名")
+                    with col3:
+                        if st.button("編集", key=f"edit_{date_key}", use_container_width=True):
+                            st.session_state.daily_users_date = datetime.fromisoformat(date_key).date()
+                            st.rerun()
+                        if st.button("削除", key=f"delete_{date_key}", use_container_width=True, type="secondary"):
+                            if dm.delete_daily_users(date_key):
+                                st.success("✅ 削除しました")
+                                st.rerun()
+                            else:
+                                st.error("削除に失敗しました")
+            
+            # CSVエクスポート
+            st.markdown("---")
+            if st.button("📥 CSV形式でエクスポート", use_container_width=True):
+                export_data = []
+                for date_key in filtered_dates:
+                    users_list = all_daily_users[date_key]
+                    export_data.append({
+                        "日付": date_key,
+                        "利用者数": len(users_list),
+                        "利用者名": ", ".join(users_list)
+                    })
+                
+                df_export = pd.DataFrame(export_data)
+                csv = df_export.to_csv(index=False, encoding='utf-8-sig')
+                st.download_button(
+                    label="📥 CSVをダウンロード",
+                    data=csv,
+                    file_name=f"日別利用者記録_{date.today().isoformat()}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+
 def render_settings():
     """設定画面の描画"""
     st.markdown('<div class="main-header">⚙️ 設定</div>', unsafe_allow_html=True)
@@ -2340,6 +2521,8 @@ def main():
         render_user_master()
     elif st.session_state.current_page == "朝礼議事録":
         render_morning_meeting()
+    elif st.session_state.current_page == "日別利用者記録":
+        render_daily_users_management()
     elif st.session_state.current_page == "設定":
         render_settings()
 

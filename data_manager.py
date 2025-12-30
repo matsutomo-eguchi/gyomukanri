@@ -1358,6 +1358,40 @@ class DataManager:
             print(f"日別利用者記録取得エラー: {e}")
             return []
     
+    def get_all_daily_users(self) -> Dict[str, List[str]]:
+        """
+        すべての日別利用者記録を取得
+        
+        Returns:
+            日付をキー、利用者名のリストを値とする辞書
+        """
+        try:
+            return self._load_daily_users()
+        except Exception as e:
+            print(f"日別利用者記録一覧取得エラー: {e}")
+            return {}
+    
+    def delete_daily_users(self, target_date: str) -> bool:
+        """
+        指定日の利用者記録を削除
+        
+        Args:
+            target_date: 対象日（YYYY-MM-DD形式）
+            
+        Returns:
+            成功した場合True
+        """
+        try:
+            daily_users = self._load_daily_users()
+            if target_date in daily_users:
+                del daily_users[target_date]
+                self._save_daily_users(daily_users)
+                return True
+            return False
+        except Exception as e:
+            print(f"日別利用者記録削除エラー: {e}")
+            return False
+    
     def create_backup(self) -> Optional[str]:
         """
         データファイルのバックアップを作成
