@@ -1940,9 +1940,30 @@ def render_morning_meeting():
                 
                 st.markdown("---")
                 
-                # 削除機能
+                # ダウンロード機能と削除機能
                 col1, col2 = st.columns([1, 1])
                 with col1:
+                    # Markdown形式でダウンロード
+                    md_content = dm.format_morning_meeting_as_markdown(selected_meeting)
+                    meeting_date_str = selected_meeting.get("日付", "")
+                    if meeting_date_str:
+                        try:
+                            date_obj = datetime.fromisoformat(meeting_date_str).date()
+                            filename = f"朝礼議事録_{date_obj.strftime('%Y%m%d')}.md"
+                        except:
+                            filename = f"朝礼議事録_{datetime.now().strftime('%Y%m%d')}.md"
+                    else:
+                        filename = f"朝礼議事録_{datetime.now().strftime('%Y%m%d')}.md"
+                    
+                    st.download_button(
+                        label="📥 Markdownファイルをダウンロード",
+                        data=md_content,
+                        file_name=filename,
+                        mime="text/markdown",
+                        use_container_width=True
+                    )
+                
+                with col2:
                     # 削除確認用のセッションステート
                     delete_key = f"delete_meeting_{selected_meeting.get('created_at', '')}"
                     if delete_key not in st.session_state:
