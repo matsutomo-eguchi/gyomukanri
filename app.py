@@ -334,6 +334,59 @@ def render_sidebar():
             label="📊 本日の利用者数",
             value=f"{daily_user_count}名"
         )
+        
+        st.markdown("---")
+        
+        # 簡易利用者記録機能
+        st.subheader("👥 利用者記録")
+        
+        # 登録済み利用者を取得
+        registered_users = st.session_state.data_manager.get_active_users()
+        
+        if registered_users:
+            # その日の利用者記録を取得
+            today_users = st.session_state.data_manager.get_daily_users(
+                work_date.isoformat()
+            )
+            
+            # プルダウンで利用者を選択（複数選択可能）
+            selected_users = st.multiselect(
+                "利用者を選択",
+                options=registered_users,
+                default=today_users,
+                key="daily_users_selection",
+                help="その日の利用者を選択してください"
+            )
+            
+            # 選択した利用者の一覧を表示
+            if selected_users:
+                st.markdown("**選択中の利用者:**")
+                for idx, user_name in enumerate(selected_users, 1):
+                    st.markdown(f"{idx}. {user_name}")
+                
+                st.markdown(f"**合計: {len(selected_users)}名**")
+                
+                # 保存ボタン
+                if st.button("💾 利用者記録を保存", use_container_width=True, type="primary"):
+                    if st.session_state.data_manager.save_daily_users(
+                        work_date.isoformat(),
+                        selected_users
+                    ):
+                        st.success(f"✅ {len(selected_users)}名の利用者を記録しました")
+                        st.rerun()
+                    else:
+                        st.error("保存に失敗しました")
+            else:
+                st.info("利用者を選択してください")
+                
+                # 既存の記録がある場合は表示
+                if today_users:
+                    st.markdown("**現在の記録:**")
+                    for idx, user_name in enumerate(today_users, 1):
+                        st.markdown(f"{idx}. {user_name}")
+                    st.markdown(f"**合計: {len(today_users)}名**")
+        else:
+            st.warning("利用者が登録されていません。先に「利用者マスタ管理」で利用者を追加してください。")
 
 
 def render_ai_assistant(text_area_key: str, child_name: Optional[str] = None):
