@@ -323,13 +323,17 @@ def render_sidebar():
             daily_user_count = st.session_state.data_manager.get_daily_user_count(
                 work_date.isoformat()
             )
-            st.metric(
-                label="📊 本日の利用者数",
-                value=f"{daily_user_count}名"
-            )
         except Exception as e:
-            # エラーが発生した場合は非表示（エラーログは出さない）
-            pass
+            # エラーが発生した場合は0を返す
+            daily_user_count = 0
+            # デバッグ用（必要に応じてコメントアウト）
+            # st.error(f"利用者数取得エラー: {str(e)}")
+        
+        # 常に表示（データがない場合は0名）
+        st.metric(
+            label="📊 本日の利用者数",
+            value=f"{daily_user_count}名"
+        )
 
 
 def render_ai_assistant(text_area_key: str, child_name: Optional[str] = None):

@@ -693,12 +693,18 @@ class DataManager:
             if df.empty or "業務日" not in df.columns:
                 return 0
             
-            # 業務日を日付型に変換
-            df["業務日"] = pd.to_datetime(df["業務日"]).dt.date
+            # 業務日を文字列形式に統一して比較（YYYY-MM-DD形式）
+            # まず日付型に変換してから文字列に変換
+            df["業務日_str"] = pd.to_datetime(df["業務日"]).dt.strftime("%Y-%m-%d")
+            
+            # 指定日も文字列形式に変換
+            if isinstance(target_date, str):
+                target_date_str = target_date
+            else:
+                target_date_str = target_date.isoformat() if hasattr(target_date, 'isoformat') else str(target_date)
             
             # 指定日のデータをフィルタリング
-            target_date_obj = datetime.fromisoformat(target_date).date()
-            daily_df = df[df["業務日"] == target_date_obj]
+            daily_df = df[df["業務日_str"] == target_date_str]
             
             if daily_df.empty:
                 return 0
@@ -725,6 +731,8 @@ class DataManager:
             return len(unique_users)
         except Exception as e:
             print(f"利用者数カウントエラー: {e}")
+            import traceback
+            traceback.print_exc()
             return 0
     
     def _init_tags_file(self):
