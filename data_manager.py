@@ -696,6 +696,67 @@ class DataManager:
         
         return df
     
+    def get_daily_user_count(self, target_date: str) -> int:
+        """
+        指定日の利用者数合計を取得
+        
+        Args:
+            target_date: 対象日（YYYY-MM-DD形式）
+            
+        Returns:
+            その日のユニークな利用者数
+        """
+        if not self.report_file.exists():
+            return 0
+        
+        try:
+            df = pd.read_csv(self.report_file, encoding='utf-8')
+            
+            if df.empty or "業務日" not in df.columns:
+                return 0
+            
+            # 業務日を文字列形式に統一して比較（YYYY-MM-DD形式）
+            # まず日付型に変換してから文字列に変換
+            df["業務日_str"] = pd.to_datetime(df["業務日"]).dt.strftime("%Y-%m-%d")
+            
+            # 指定日も文字列形式に変換
+            if isinstance(target_date, str):
+                target_date_str = target_date
+            else:
+                target_date_str = target_date.isoformat() if hasattr(target_date, 'isoformat') else str(target_date)
+            
+            # 指定日のデータをフィルタリング
+            daily_df = df[df["業務日_str"] == target_date_str]
+            
+            if daily_df.empty:
+                return 0
+            
+            # ユニークな利用者名を収集
+            unique_users = set()
+            
+            # 担当利用者名から取得
+            if "担当利用者名" in daily_df.columns:
+                for user_name in daily_df["担当利用者名"].dropna():
+                    if user_name and str(user_name).strip():
+                        unique_users.add(str(user_name).strip())
+            
+            # 送迎児童名から取得（カンマ区切りで複数名が記録されている可能性がある）
+            if "送迎児童名" in daily_df.columns:
+                for children_names in daily_df["送迎児童名"].dropna():
+                    if children_names and str(children_names).strip():
+                        # カンマ区切りで分割
+                        names = [name.strip() for name in str(children_names).split(",")]
+                        for name in names:
+                            if name:
+                                unique_users.add(name)
+            
+            return len(unique_users)
+        except Exception as e:
+            print(f"利用者数カウントエラー: {e}")
+            import traceback
+            traceback.print_exc()
+            return 0
+    
     def _init_tags_file(self):
         """タグマスタファイルが存在しない場合、初期化（既存データは保護）"""
         # 既存データを絶対に上書きしない
