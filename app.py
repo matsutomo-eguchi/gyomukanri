@@ -315,6 +315,21 @@ def render_sidebar():
             start_time = st.time_input("始業時間", value=time(9, 0), key="start_time")
         with col2:
             end_time = st.time_input("終業時間", value=time(17, 0), key="end_time")
+        
+        st.markdown("---")
+        
+        # 1日の利用者数合計を表示
+        try:
+            daily_user_count = st.session_state.data_manager.get_daily_user_count(
+                work_date.isoformat()
+            )
+            st.metric(
+                label="📊 本日の利用者数",
+                value=f"{daily_user_count}名"
+            )
+        except Exception as e:
+            # エラーが発生した場合は非表示（エラーログは出さない）
+            pass
 
 
 def render_ai_assistant(text_area_key: str, child_name: Optional[str] = None):
