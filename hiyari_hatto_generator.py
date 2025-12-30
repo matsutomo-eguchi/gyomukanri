@@ -6,7 +6,14 @@ HTMLテンプレートに忠実なレイアウトを実現します
 import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm, pt
+try:
+    from reportlab.lib.units import mm, pt
+except ImportError:
+    # ReportLabのバージョンによっては直接インポートできない場合があるため、
+    # モジュールをインポートして使用する
+    import reportlab.lib.units as units
+    mm = units.mm
+    pt = units.pt
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Table, TableStyle, Paragraph
