@@ -1,16 +1,20 @@
 """
 事故報告書PDF生成モジュール
 ReportLabを使用して事故報告書のPDFを生成します
+HTMLテンプレートに忠実なレイアウトを実現します
 """
 import os
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm
+from reportlab.lib.units import mm, pt
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.platypus import Table, TableStyle
+from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+import math
 
 
 class AccidentReportGenerator:
@@ -25,6 +29,8 @@ class AccidentReportGenerator:
         """
         self.filename = filename
         self.width, self.height = A4
+        self.margin = 15 * mm  # HTMLの@page marginに合わせる
+        
         # 日本語フォントの登録 (HeiseiMin=明朝体, HeiseiKakuGo=ゴシック体)
         try:
             pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3-Acro"))
@@ -35,7 +41,101 @@ class AccidentReportGenerator:
             # フォント登録に失敗した場合のフォールバック
             self.font_reg = "Helvetica"
             self.font_bold = "Helvetica-Bold"
-
+        
+        # スタイルシートの準備
+        self.styles = getSampleStyleSheet()
+        self.setup_custom_styles()
+    
+    def setup_custom_styles(self):
+        """カスタムスタイルの設定"""
+        # 本文用スタイル（11pt、明朝体）
+        self.para_style = ParagraphStyle(
+            'CustomBody',
+            parent=self.styles['Normal'],
+            fontName=self.font_reg,
+            fontSize=11,
+            leading=15.4,  # line-height: 1.4
+            alignment=TA_LEFT,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+        
+        # タイトル用スタイル
+        self.title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=self.styles['Normal'],
+            fontName=self.font_bold,
+            fontSize=16.5,  # 1.5em = 11pt * 1.5
+            leading=23.1,
+            alignment=TA_CENTER,
+        )
+        
+        # ラベル用スタイル（0.9em = 9.9pt）
+        self.label_style = ParagraphStyle(
+            'CustomLabel',
+            parent=self.styles['Normal'],
+            fontName=self.font_bold,
+            fontSize=9.9,
+            leading=13.86,
+            alignment=TA_LEFT,
+        )
+    
+    def draw_vertical_text(self, canvas_obj, text, x, y, width, height, font_name, font_size):
+        """
+        縦書きテキストを描画
+        
+        Args:
+            canvas_obj: Canvasオブジェクト
+            text: 描画するテキスト
+            x, y: テキストの基準位置（左下、セルの左下）
+            width, height: セルの幅と高さ
+            font_name: フォント名
+            font_size: フォントサイズ
+        """
+        canvas_obj.saveState()
+        
+        # セルの中央に配置（パディングを考慮）
+        padding = 5  # セルのパディング
+        center_x = x + width / 2
+        center_y = y + height / 2
+        
+        # 文字間隔を計算（letter-spacing: 0.3em）
+        char_spacing = font_size * 0.3
+        
+        # テキストの総高さを計算
+        total_height = len(text) * (font_size + char_spacing) - char_spacing
+        
+        # 開始位置を計算（中央から上に）
+        start_y = center_y + total_height / 2 - font_size
+        
+        # 各文字を縦に配置
+        for i, char in enumerate(text):
+            char_y = start_y - i * (font_size + char_spacing)
+            # 文字を回転させて描画
+            canvas_obj.saveState()
+            canvas_obj.translate(center_x, char_y)
+            canvas_obj.rotate(90)
+            canvas_obj.setFont(font_name, font_size)
+            # 文字の中央揃えのため、文字幅の半分だけ左にずらす
+            char_width = canvas_obj.stringWidth(char, font_name, font_size)
+            canvas_obj.drawString(-char_width / 2, 0, char)
+            canvas_obj.restoreState()
+        
+        canvas_obj.restoreState()
+    
+    def draw_underline(self, canvas_obj, x, y, width, line_width=0.5):
+        """
+        下線を描画（入力欄用）
+        
+        Args:
+            canvas_obj: Canvasオブジェクト
+            x, y: 線の開始位置
+            width: 線の幅
+            line_width: 線の太さ
+        """
+        canvas_obj.setLineWidth(line_width)
+        canvas_obj.line(x, y, x + width, y)
+    
     def generate(self, data):
         """
         AIが生成したデータを受け取りPDFを作成する
@@ -43,138 +143,372 @@ class AccidentReportGenerator:
         Args:
             data: 事故報告の内容を含む辞書
                 - facility_name: 事業所名
+                - report_content: 報告内容（新規追加）
                 - date_year, date_month, date_day: 発生日（年、月、日）
                 - date_weekday: 曜日
                 - time_hour, time_min: 発生時刻（時、分）
                 - location: 発生場所
                 - subject_name: 対象者名
-                - situation: 事故発生の状況
-                - process: 経過
+                - situation: 事故発生の状況と経過（統合）
+                - process: 経過（situationに統合される可能性あり）
                 - cause: 事故原因
                 - countermeasure: 対策
                 - others: その他
                 - reporter_name: 報告者氏名
-                - record_date: 記録日
+                - record_date_year, record_date_month, record_date_day: 記録日（年、月、日）
         """
         c = canvas.Canvas(self.filename, pagesize=A4)
         c.setTitle("事故状況・対策報告書")
-
-        # --- タイトル ---
-        c.setFont(self.font_bold, 18)
-        c.drawCentredString(self.width / 2, self.height - 20 * mm, "事故状況・対策報告書")
-
-        # --- ヘッダー情報 (事業所名など) ---
-        y_pos = self.height - 40 * mm
-        c.setFont(self.font_bold, 11)
-        c.drawString(20 * mm, y_pos, "【事業所名】")
-        c.setFont(self.font_reg, 11)
-        # 事業所名の下線
-        c.line(45 * mm, y_pos - 1 * mm, 120 * mm, y_pos - 1 * mm)
-        c.drawString(45 * mm, y_pos, data.get("facility_name", ""))
-
-        # --- 事故基本情報 (グリッドレイアウト) ---
-        # 報告内容, 発生場所, 対象者などを配置
-        y_pos -= 10 * mm
         
-        # 発生日時
-        c.setFont(self.font_bold, 10)
-        c.drawString(20 * mm, y_pos, "事故発生日時：")
-        c.setFont(self.font_reg, 10)
-        date_str = f"{data.get('date_year', '    ')} 年  {data.get('date_month', '  ')} 月  {data.get('date_day', '  ')} 日"
-        time_str = f"{data.get('time_hour', '  ')} 時  {data.get('time_min', '  ')} 分頃"
-        weekday = f"({data.get('date_weekday', '  ')})曜日"
-        c.drawString(50 * mm, y_pos, f"{date_str}   {time_str}   {weekday}")
-
-        y_pos -= 8 * mm
-        c.setFont(self.font_bold, 10)
-        c.drawString(20 * mm, y_pos, "発生場所：")
-        c.setFont(self.font_reg, 10)
-        c.drawString(50 * mm, y_pos, data.get("location", ""))
-
-        c.setFont(self.font_bold, 10)
-        c.drawString(110 * mm, y_pos, "対象者：")
-        c.setFont(self.font_reg, 10)
-        c.drawString(130 * mm, y_pos, data.get("subject_name", ""))
-
-        # --- メインテーブル (状況、経過、原因、対策、その他) ---
-        # テーブルの定義
-        headers = [
-            ("事故発生の\n状況", data.get("situation", "")),
-            ("経過", data.get("process", "")),
-            ("事故原因", data.get("cause", "")),
-            ("対策", data.get("countermeasure", "")),
-            ("その他", data.get("others", ""))
+        # ページマージンの設定
+        content_width = self.width - 2 * self.margin
+        content_height = self.height - 2 * self.margin
+        start_x = self.margin
+        start_y = self.height - self.margin
+        
+        # 現在のY位置を追跡
+        current_y = start_y
+        
+        # ===== ヘッダーテーブル =====
+        # テーブルデータ: [タイトル, 事業所名, 管理者]
+        header_table_data = [
+            [
+                Paragraph("事故状況・対策報告書", self.title_style),
+                Paragraph(
+                    f'<para leading="13.86"><b>事業所名</b><br/>{data.get("facility_name", "")}</para>',
+                    self.para_style
+                ),
+                Paragraph(
+                    '<para leading="13.86"><b>管理者</b><br/><br/><br/>㊞</para>',
+                    self.para_style
+                )
+            ]
         ]
-
-        table_data = []
-        for title, content in headers:
-            table_data.append([title, content])
-
-        # テーブルスタイル
-        t_style = [
-            ('FONT', (0, 0), (-1, -1), self.font_reg, 10),
-            ('FONT', (0, 0), (0, -1), self.font_bold, 10),  # 左列は太字
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        
+        # ヘッダーテーブルの列幅（40%, 40%, 20%）
+        header_col_widths = [
+            content_width * 0.40,  # タイトル
+            content_width * 0.40,  # 事業所名
+            content_width * 0.20,  # 管理者
+        ]
+        
+        header_table = Table(
+            header_table_data,
+            colWidths=header_col_widths,
+            rowHeights=[60 * mm]  # 高さ60px相当
+        )
+        
+        header_table_style = TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.black),  # 2px = 約0.7mm
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, 0), 'CENTER'),  # タイトル中央
+            ('ALIGN', (1, 0), (1, 0), 'LEFT'),    # 事業所名左
+            ('ALIGN', (2, 0), (2, 0), 'LEFT'),    # 管理者左
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 15),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+        ])
+        
+        header_table.setStyle(header_table_style)
+        header_w, header_h = header_table.wrapOn(c, content_width, content_height)
+        header_table.drawOn(c, start_x, current_y - header_h)
+        current_y -= header_h + 5 * mm
+        
+        # ===== 情報テーブル（第1行） =====
+        # 報告内容、報告者氏名、記録日
+        record_date_year = data.get("record_date_year", "")
+        record_date_month = data.get("record_date_month", "")
+        record_date_day = data.get("record_date_day", "")
+        
+        # 記録日が文字列の場合、パースを試みる
+        if not record_date_year and data.get("record_date"):
+            try:
+                # "2024年01月15日"形式から抽出
+                date_str = data.get("record_date", "")
+                if "年" in date_str:
+                    parts = date_str.replace("年", " ").replace("月", " ").replace("日", "").split()
+                    if len(parts) >= 3:
+                        record_date_year = parts[0]
+                        record_date_month = parts[1]
+                        record_date_day = parts[2]
+            except:
+                pass
+        
+        # 報告内容が指定されていない場合は空文字列
+        report_content = data.get("report_content", "")
+        if not report_content:
+            # situationから簡潔に抽出するか、空のまま
+            report_content = ""
+        
+        info_row1_data = [
+            [
+                Paragraph(
+                    f'<para leading="13.86"><b>報告内容</b><br/>{report_content}</para>',
+                    self.para_style
+                )
+            ],
+            [
+                Paragraph(
+                    f'<para leading="13.86"><b>報告者氏名</b><br/>{data.get("reporter_name", "")}</para>',
+                    self.para_style
+                )
+            ],
+            [
+                Paragraph(
+                    f'<para leading="13.86" align="right"><b>記録日</b><br/>{record_date_year} 年 {record_date_month} 月 {record_date_day} 日</para>',
+                    self.para_style
+                )
+            ]
+        ]
+        
+        info_row1_col_widths = [
+            content_width * 0.35,  # 報告内容
+            content_width * 0.35,  # 報告者氏名
+            content_width * 0.30,  # 記録日
+        ]
+        
+        info_row1_table = Table(
+            info_row1_data,
+            colWidths=info_row1_col_widths,
+            rowHeights=[None]  # 自動調整
+        )
+        
+        info_row1_style = TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.black),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # 左列は中央揃え
-            ('ALIGN', (1, 0), (1, -1), 'LEFT'),     # 右列は左揃え
+            ('ALIGN', (0, 0), (1, 0), 'LEFT'),  # 報告内容、報告者氏名は左
+            ('ALIGN', (2, 0), (2, 0), 'RIGHT'),  # 記録日は右
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
             ('RIGHTPADDING', (0, 0), (-1, -1), 5),
             ('TOPPADDING', (0, 0), (-1, -1), 5),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ])
+        
+        info_row1_table.setStyle(info_row1_style)
+        info_row1_w, info_row1_h = info_row1_table.wrapOn(c, content_width, content_height)
+        info_row1_table.drawOn(c, start_x, current_y - info_row1_h)
+        current_y -= info_row1_h + 5 * mm
+        
+        # ===== 情報テーブル（第2行） =====
+        # 事故発生日時、発生場所、対象者
+        date_year = data.get("date_year", "")
+        date_month = data.get("date_month", "")
+        date_day = data.get("date_day", "")
+        time_hour = data.get("time_hour", "")
+        time_min = data.get("time_min", "")
+        date_weekday = data.get("date_weekday", "")
+        
+        datetime_text = f'<para leading="13.86"><b>事故発生日時</b><br/>{date_year} 年 {date_month} 月 {date_day} 日<br/>{time_hour} 時 {time_min} 分頃<br/>（ {date_weekday} ）曜日</para>'
+        
+        info_row2_data = [
+            [Paragraph(datetime_text, self.para_style)],
+            [
+                Paragraph(
+                    f'<para leading="13.86"><b>発生場所</b><br/>{data.get("location", "")}</para>',
+                    self.para_style
+                )
+            ],
+            [
+                Paragraph(
+                    f'<para leading="13.86"><b>対象者</b><br/>{data.get("subject_name", "")}</para>',
+                    self.para_style
+                )
+            ]
         ]
-
-        # 列幅の設定 (左カラム: 30mm, 右カラム: 残り)
-        col_widths = [30 * mm, 140 * mm]
-        # 行の高さ (概算で配分)
-        row_heights = [50 * mm, 30 * mm, 30 * mm, 40 * mm, 20 * mm]
-
-        t = Table(table_data, colWidths=col_widths, rowHeights=row_heights)
-        t.setStyle(TableStyle(t_style))
         
-        # テーブルを描画
-        w, h = t.wrapOn(c, self.width, self.height)
-        t.drawOn(c, 20 * mm, y_pos - h - 5 * mm)  # 前の要素の下に配置
-
-        footer_y_start = y_pos - h - 15 * mm
-
-        # --- フッター (署名欄) ---
-        # 管理者、報告者、記録日
-        c.setFont(self.font_reg, 10)
+        info_row2_col_widths = [
+            content_width * 0.40,  # 事故発生日時
+            content_width * 0.30,  # 発生場所
+            content_width * 0.30,  # 対象者
+        ]
         
-        # 枠線ボックスの作成
-        box_y = footer_y_start - 20 * mm
+        info_row2_table = Table(
+            info_row2_data,
+            colWidths=info_row2_col_widths,
+            rowHeights=[None]
+        )
         
-        # 管理者印欄
-        c.rect(110 * mm, box_y, 25 * mm, 20 * mm)
-        c.drawString(112 * mm, box_y + 16 * mm, "管理者")
+        info_row2_style = TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ])
         
-        # 報告者氏名欄
-        c.rect(140 * mm, box_y, 40 * mm, 20 * mm)
-        c.drawString(142 * mm, box_y + 16 * mm, "報告者氏名")
-        c.drawString(145 * mm, box_y + 5 * mm, data.get("reporter_name", ""))
-
-        # 記録日
-        c.drawString(140 * mm, box_y + 22 * mm, f"記録日: {data.get('record_date', '')}")
-
-        # --- 保護者確認欄 ---
-        confirm_y = box_y - 35 * mm
-        c.rect(20 * mm, confirm_y, 160 * mm, 30 * mm)
+        info_row2_table.setStyle(info_row2_style)
+        info_row2_w, info_row2_h = info_row2_table.wrapOn(c, content_width, content_height)
+        info_row2_table.drawOn(c, start_x, current_y - info_row2_h)
+        current_y -= info_row2_h + 5 * mm
         
-        c.setFont(self.font_reg, 9)
-        c.drawString(25 * mm, confirm_y + 25 * mm, "上記について、説明を受けました。")
-        c.drawString(100 * mm, confirm_y + 25 * mm, "(説明が必要な場合に署名・捺印を頂きます)")
+        # ===== 本文テーブル =====
+        # 縦書きカテゴリと横書き内容
+        # situationとprocessを統合
+        situation_text = data.get("situation", "")
+        process_text = data.get("process", "")
+        if process_text and process_text != situation_text:
+            situation_full = f"{situation_text}\n\n【経過】\n{process_text}"
+        else:
+            situation_full = situation_text
         
-        # 日付署名欄
+        body_table_data = [
+            [
+                "",  # 縦書きテキストは後で描画
+                Paragraph(situation_full, self.para_style)
+            ],
+            [
+                "",
+                Paragraph(data.get("cause", ""), self.para_style)
+            ],
+            [
+                "",
+                Paragraph(data.get("countermeasure", ""), self.para_style)
+            ],
+            [
+                "",
+                Paragraph(data.get("others", ""), self.para_style)
+            ]
+        ]
+        
+        # 縦書きカテゴリのテキスト
+        vertical_labels = [
+            "事故発生状況と経過",
+            "事故原因",
+            "対　策",
+            "その他"
+        ]
+        
+        # 本文テーブルの列幅（縦書きカラム: 50px相当、内容カラム: 残り）
+        body_col_widths = [
+            50 * mm,  # 縦書きカテゴリ
+            content_width - 50 * mm - 0.7 * 2,  # 内容（境界線分を引く）
+        ]
+        
+        # 行の高さ（HTMLのheightに合わせる）
+        body_row_heights = [
+            180 * mm / 3.78,  # 180px → mm（1px ≈ 0.264mm）
+            120 * mm / 3.78,  # 120px
+            120 * mm / 3.78,  # 120px
+            80 * mm / 3.78,   # 80px
+        ]
+        
+        body_table = Table(
+            body_table_data,
+            colWidths=body_col_widths,
+            rowHeights=body_row_heights
+        )
+        
+        body_table_style = TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # 縦書きカラム中央
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),    # 内容左
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 15),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+            ('LEFTPADDING', (1, 0), (1, -1), 5),
+            ('RIGHTPADDING', (1, 0), (1, -1), 5),
+            ('TOPPADDING', (1, 0), (1, -1), 5),
+            ('BOTTOMPADDING', (1, 0), (1, -1), 5),
+        ])
+        
+        body_table.setStyle(body_table_style)
+        body_w, body_h = body_table.wrapOn(c, content_width, content_height)
+        body_table_y = current_y - body_h
+        body_table.drawOn(c, start_x, body_table_y)
+        
+        # 縦書きテキストを描画
+        # テーブルの各セルの位置を計算（ReportLabのテーブル描画後の座標）
+        # ReportLabのテーブルは下から上に描画されるため、Y座標は下から上に累積
+        table_x = start_x
+        table_y = body_table_y
+        
+        # 各行のY位置を計算（下から上へ）
+        # 最初の行（最下段）から開始
+        cumulative_height = 0
+        for i in range(len(vertical_labels)):
+            # 下から数えてi行目のセルのY位置
+            cell_x = table_x
+            # 下から上に累積高さを計算（境界線の太さも考慮）
+            cell_y = table_y + cumulative_height
+            cell_width = body_col_widths[0]
+            cell_height = body_row_heights[i]
+            
+            # 縦書きテキストを描画（セルの中央に配置）
+            self.draw_vertical_text(
+                c,
+                vertical_labels[i],
+                cell_x,
+                cell_y,
+                cell_width,
+                cell_height,
+                self.font_bold,
+                11
+            )
+            
+            # 次の行のために累積高さを更新（境界線の太さ0.7mmも考慮）
+            cumulative_height += body_row_heights[i] + 0.7
+        
+        current_y -= body_h + 10 * mm
+        
+        # ===== フッター =====
+        # 説明文と確認文
+        footer_y = current_y - 10 * mm
+        
+        # 説明文
+        c.setFont(self.font_reg, 9.9)  # 0.9em = 9.9pt
+        c.drawString(start_x, footer_y, "（説明が必要な場合に署名・捺印を頂きます）")
+        
+        footer_y -= 15 * mm
+        
+        # 確認文（1.2em = 13.2pt、左マージン20px = 約5.3mm）
+        c.setFont(self.font_reg, 13.2)  # 1.2em
+        c.drawString(start_x + 5.3 * mm, footer_y, "上記について、説明を受けました。")
+        
+        footer_y -= 20 * mm
+        
+        # 署名欄（HTMLでは右寄せ、margin-right: 20px）
+        sign_area_y = footer_y
         c.setFont(self.font_reg, 11)
-        c.drawString(30 * mm, confirm_y + 10 * mm, "年       月       日")
-        c.drawString(90 * mm, confirm_y + 10 * mm, "氏名")
-        c.line(105 * mm, confirm_y + 10 * mm, 170 * mm, confirm_y + 10 * mm)  # 氏名の下線
-
+        
+        # HTMLの構造: 日付、改行、氏名 + 下線 + 印鑑マーク（すべて右寄せ）
+        # 右マージン20px = 約5.3mm
+        right_margin = 5.3 * mm
+        sign_area_right = start_x + content_width - right_margin
+        
+        # 日付欄（右寄せ）
+        date_text = f"{record_date_year} 年 {record_date_month} 月 {record_date_day} 日"
+        date_width = c.stringWidth(date_text, self.font_reg, 11)
+        c.drawString(sign_area_right - date_width, sign_area_y, date_text)
+        
+        # 改行後の氏名欄（右寄せ）
+        sign_area_y -= 20 * mm  # line-height: 2.5相当
+        
+        # 氏名ラベル
+        name_label = "氏名"
+        name_label_width = c.stringWidth(name_label, self.font_reg, 11)
+        name_label_x = sign_area_right - 66 * mm - 1.3 * mm - 20 * mm  # 下線幅 + 印鑑マージン + ラベルマージン
+        c.drawString(name_label_x, sign_area_y, name_label)
+        
+        # 氏名の下線（250px = 約66mm）
+        underline_x = name_label_x + 20 * mm  # ラベルの後10px = 約2.6mm、少し余裕を持たせる
+        underline_width = 66 * mm
+        c.setLineWidth(0.5)
+        c.line(underline_x, sign_area_y - 2, underline_x + underline_width, sign_area_y - 2)
+        
+        # 印鑑マーク（下線の右側、margin-left: 5px = 約1.3mm）
+        stamp_x = underline_x + underline_width + 1.3 * mm
+        c.setFont(self.font_reg, 8.8)  # 0.8em = 8.8pt
+        c.drawString(stamp_x, sign_area_y, "㊞")
+        
         # 保存
         c.save()
         return self.filename
-
+    
     @staticmethod
     def format_date_for_report(date_obj):
         """
@@ -199,6 +533,8 @@ class AccidentReportGenerator:
             "date_year": str(date_obj.year),
             "date_month": str(date_obj.month),
             "date_day": str(date_obj.day),
-            "date_weekday": weekday
+            "date_weekday": weekday,
+            "record_date_year": str(date_obj.year),
+            "record_date_month": str(date_obj.month),
+            "record_date_day": str(date_obj.day),
         }
-

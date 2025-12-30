@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>事故状況・対策報告書</title>
+<style>
+    @page {
+        size: A4;
+        margin: 15mm;
+    }
+    body {
+        font-family: "Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+        font-size: 11pt;
+        line-height: 1.4;
+        color: #000;
+        background-color: #fff;
+        margin: 0;
+        padding: 20px;
+    }
+    .container {
+        width: 100%;
+        max-width: 800px; /* A4 width approx */
+        margin: 0 auto;
+    }
+    
+    /* Utility */
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .bold { font-weight: bold; }
+    .stamp-mark { 
+        display: inline-block;
+        border: 1px solid #ccc; /* visible for UI, transparent for paper typically but kept for form feel */
+        color: #ccc;
+        width: 1.2em;
+        height: 1.2em;
+        line-height: 1.2em;
+        border-radius: 50%;
+        text-align: center;
+        font-size: 0.8em;
+        margin-left: 5px;
+    }
+
+    /* Table Styles */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    th, td {
+        border: 2px solid #333; /* Thick border as per image */
+        padding: 5px;
+        vertical-align: top;
+    }
+    
+    /* Header Layout */
+    .header-table td {
+        border: 2px solid #333;
+    }
+    .title-cell {
+        font-size: 1.5em;
+        font-weight: bold;
+        vertical-align: middle;
+        text-align: center;
+        width: 40%;
+        padding: 15px;
+    }
+    .office-info {
+        vertical-align: top;
+    }
+    .manager-cell {
+        width: 20%;
+        position: relative;
+        height: 60px;
+    }
+    .manager-stamp {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+    }
+
+    /* Info Grid */
+    .label {
+        font-size: 0.9em;
+        font-weight: bold;
+        margin-bottom: 5px;
+        display: block;
+    }
+    .input-line {
+        border: none;
+        border-bottom: 1px solid #ccc;
+        width: 100%;
+        font-family: inherit;
+        font-size: inherit;
+    }
+    .date-input {
+        width: 3em;
+        text-align: right;
+        border: none;
+        border-bottom: 1px solid #999;
+    }
+    
+    /* Specific Cells */
+    .col-content { width: 35%; }
+    .col-reporter { width: 35%; }
+    .col-date { width: 30%; }
+    
+    .col-datetime { width: 40%; }
+    .col-place { width: 30%; }
+    .col-target { width: 30%; }
+
+    /* Main Body Grid */
+    .body-table td.category {
+        width: 50px;
+        text-align: center;
+        vertical-align: middle;
+        writing-mode: vertical-rl; /* Vertical text */
+        letter-spacing: 0.3em;
+        font-weight: bold;
+        padding: 15px 5px;
+    }
+    
+    /* Fix for horizontal text in vertical columns if needed, 
+       but image shows simple vertical labels like "事故発生状況と経過" */
+    .vertical-text {
+        writing-mode: vertical-rl;
+        text-orientation: upright;
+        margin: 0 auto;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    textarea {
+        width: 100%;
+        border: none;
+        resize: vertical;
+        font-family: inherit;
+        font-size: inherit;
+        background: transparent;
+    }
+
+    /* Heights for text areas matching image ratios */
+    .h-situation { height: 180px; }
+    .h-cause { height: 120px; }
+    .h-measure { height: 120px; }
+    .h-other { height: 80px; }
+
+    /* Footer */
+    .footer {
+        margin-top: 10px;
+    }
+    .footer-note {
+        font-size: 0.9em;
+        margin-bottom: 15px;
+    }
+    .confirmation-text {
+        font-size: 1.2em;
+        margin-bottom: 20px;
+        margin-left: 20px;
+    }
+    .sign-area {
+        text-align: right;
+        margin-right: 20px;
+        line-height: 2.5;
+    }
+    .sign-line {
+        display: inline-block;
+        border-bottom: 1px solid #000;
+        width: 250px;
+        text-align: center;
+    }
+
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <table class="header-table">
+        <tr>
+            <td class="title-cell">事故状況・対策報告書</td>
+            <td class="office-info">
+                <span class="label">事業所名</span>
+                <input type="text" class="input-line" style="margin-top: 10px;">
+            </td>
+            <td class="manager-cell">
+                <span class="label">管理者</span>
+                <div class="manager-stamp">㊞</div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="info-table">
+        <tr>
+            <td class="col-content">
+                <span class="label">報告内容</span>
+                <input type="text" class="input-line">
+            </td>
+            <td class="col-reporter">
+                <span class="label">報告者氏名</span>
+                <input type="text" class="input-line">
+            </td>
+            <td class="col-date">
+                <span class="label">記録日</span>
+                <div class="text-right">
+                    <input type="text" class="date-input"> 年
+                    <input type="text" class="date-input" style="width:2em"> 月
+                    <input type="text" class="date-input" style="width:2em"> 日
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td class="col-datetime">
+                <span class="label">事故発生日時</span>
+                <div style="margin-top:5px;">
+                    <input type="text" class="date-input"> 年
+                    <input type="text" class="date-input" style="width:2em"> 月
+                    <input type="text" class="date-input" style="width:2em"> 日
+                </div>
+                <div style="margin-top:5px; padding-left: 20px;">
+                    <input type="text" class="date-input"> 時
+                    <input type="text" class="date-input" style="width:2em"> 分頃
+                </div>
+                <div style="margin-top:5px; text-align:center;">
+                    （ <input type="text" style="width:3em; border:none; border-bottom:1px solid #999; text-align:center;"> ）曜日
+                </div>
+            </td>
+            <td class="col-place">
+                <span class="label">発生場所</span>
+                <textarea rows="3"></textarea>
+            </td>
+            <td class="col-target">
+                <span class="label">対象者</span>
+                <input type="text" class="input-line">
+            </td>
+        </tr>
+    </table>
+
+    <table class="body-table">
+        <tr>
+            <td class="category"><div class="vertical-text">事故発生状況と経過</div></td>
+            <td><textarea class="h-situation"></textarea></td>
+        </tr>
+        <tr>
+            <td class="category"><div class="vertical-text">事故原因</div></td>
+            <td><textarea class="h-cause"></textarea></td>
+        </tr>
+        <tr>
+            <td class="category"><div class="vertical-text">対　策</div></td>
+            <td><textarea class="h-measure"></textarea></td>
+        </tr>
+        <tr>
+            <td class="category"><div class="vertical-text">その他</div></td>
+            <td><textarea class="h-other"></textarea></td>
+        </tr>
+    </table>
+
+    <div class="footer">
+        <div class="footer-note">（説明が必要な場合に署名・捺印を頂きます）</div>
+        <div class="confirmation-text">上記について、説明を受けました。</div>
+        
+        <div class="sign-area">
+            <input type="text" class="date-input"> 年 
+            <input type="text" class="date-input" style="width:2em"> 月 
+            <input type="text" class="date-input" style="width:2em"> 日
+            <br>
+            <span style="margin-right: 10px;">氏名</span>
+            <div class="sign-line"><input type="text" style="width:90%; border:none; text-align:center; font-size:1.1em;"></div> ㊞
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

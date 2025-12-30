@@ -1231,7 +1231,10 @@ def render_daily_report_form():
                             "countermeasure": incident_countermeasure,
                             "others": incident_others,
                             "reporter_name": st.session_state.staff_name,
-                            "record_date": work_date.strftime("%Y年%m月%d日")
+                            "record_date": work_date.strftime("%Y年%m月%d日"),
+                            "record_date_year": date_info.get("record_date_year", date_info["date_year"]),
+                            "record_date_month": date_info.get("record_date_month", date_info["date_month"]),
+                            "record_date_day": date_info.get("record_date_day", date_info["date_day"])
                         }
                         
                         # 一時ファイルにPDFを生成
