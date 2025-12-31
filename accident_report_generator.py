@@ -418,7 +418,19 @@ class AccidentReportGenerator:
         # 対象者名を処理（複数の場合は「、」で区切る）
         subject_name = data.get("subject_name", "")
         if isinstance(subject_name, list):
+            # リストの場合は「、」で結合
             subject_name = "、".join(subject_name) if subject_name else ""
+        elif isinstance(subject_name, str):
+            # 文字列の場合、改行やカンマが含まれている場合は「、」に統一
+            # 改行を「、」に置換
+            subject_name = subject_name.replace("\n", "、")
+            # カンマも「、」に置換（英語のカンマを日本語の読点に統一）
+            subject_name = subject_name.replace(",", "、")
+            # 連続する「、」を1つに統一
+            while "、、" in subject_name:
+                subject_name = subject_name.replace("、、", "、")
+            # 前後の空白と「、」を削除
+            subject_name = subject_name.strip("、").strip()
         # 対象者名が長い場合や複数の場合に備えて、フォントサイズを少し小さく
         subject_text = f'<para leading="12"><b>対象者</b><br/><font size="10">{subject_name}</font></para>'
         

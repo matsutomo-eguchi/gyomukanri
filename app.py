@@ -1578,9 +1578,9 @@ def render_daily_report_form():
                                 else:
                                     report_content = title_text
                         
-                        # 対象者名を文字列に変換（複数の場合は改行で区切る）
+                        # 対象者名を文字列に変換（複数の場合は「、」で区切る）
                         if isinstance(incident_subject, list):
-                            subject_name_str = "\n".join(incident_subject) if incident_subject else ""
+                            subject_name_str = "、".join(incident_subject) if incident_subject else ""
                         else:
                             subject_name_str = str(incident_subject) if incident_subject else ""
                         
