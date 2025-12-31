@@ -456,7 +456,14 @@ def render_ai_assistant(text_area_key: str, child_name: Optional[str] = None):
 
 def render_accident_ai_assistant(text_area_key: str, report_type: str):
     """事故報告書用AI文章生成アシストUI"""
-    st.markdown(f"#### 🤖 AI文章作成アシスト（{report_type}）")
+    type_names = {
+        "situation": "事故発生の状況",
+        "process": "経過",
+        "cause": "事故原因",
+        "countermeasure": "対策"
+    }
+    type_name = type_names.get(report_type, report_type)
+    st.markdown(f"#### 🤖 AI文章作成アシスト（{type_name}）")
     
     col1, col2 = st.columns([3, 1])
     
