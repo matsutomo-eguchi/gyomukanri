@@ -477,7 +477,9 @@ class HiyariHattoGenerator:
         
         # チェックリストを手動で描画
         checklist_cell_x = start_x + countermeasure_col_width + 10  # padding考慮（10pt）
-        checklist_cell_y = countermeasure_table_y + countermeasure_h - 10  # padding考慮（上から、10pt）
+        checklist_cell_top = countermeasure_table_y + countermeasure_h - 10  # padding考慮（上から、10pt）
+        checklist_cell_bottom = countermeasure_table_y + 10  # padding考慮（下から、10pt）
+        checklist_cell_height = checklist_cell_top - checklist_cell_bottom  # セルの実際の高さ
         
         # 円のサイズ（HTMLの30px x 18px相当、半径約2mm）
         circle_radius = 2.0 * mm
@@ -485,9 +487,24 @@ class HiyariHattoGenerator:
         # チェックリストのフォントサイズは上で計算した値を使用
         c.setFont(self.font_reg, font_size_pt)
         
+        # 12項目を均等に配置するための計算
+        num_items = 12
+        # 上下のパディング（少し余裕を持たせる）
+        vertical_padding = 3 * mm
+        
+        # 選択肢1のY位置（最上部から少し下げる）
+        first_item_y = checklist_cell_top - vertical_padding
+        # 選択肢12のY位置（最下部から少し上げる）
+        last_item_y = checklist_cell_bottom + vertical_padding
+        
+        # 選択肢1と12の間の距離
+        total_spacing = first_item_y - last_item_y
+        # 11個の間隔で均等に分割（選択肢1と12の間には11個の間隔がある）
+        item_spacing = total_spacing / 11
+        
         for i in range(1, 13):
-            # 各項目のY位置を計算（上から下へ）
-            item_y = checklist_cell_y - (i - 1) * (font_height + line_spacing)
+            # 各項目のY位置を計算（選択肢1を最上部、選択肢12を最下部に均等配置）
+            item_y = first_item_y - (i - 1) * item_spacing
             
             # 番号を描画（右寄せ、HTMLの25px相当、約6.6mm）
             num_text = str(i)
@@ -541,9 +558,14 @@ def get_ai_prompt_template(situation_text):
            5:深く考えなかった 6:大丈夫だと思った 7:あわてていた 8:不愉快なことがあった
            9:疲れていた 10:無意識に手が動いた 11:やりにくかった 12:体のバランスを崩した
         "category_index": 該当する分類のインデックス(0:環境, 1:設備, 2:指導方法, 3:自分自身),
+        "cause_environment": "環境に問題があった場合の説明文（該当する場合のみ、100字以内）",
+        "cause_equipment": "設備・機器等に問題があった場合の説明文（該当する場合のみ、100字以内）",
+        "cause_guidance": "指導方法に問題があった場合の説明文（該当する場合のみ、100字以内）",
+        "cause_self": "自分自身に問題があった場合の説明文（該当する場合のみ、100字以内）",
         "countermeasure": "教訓・対策（具体的かつ実行可能なアクションプラン、100字以内）"
     }}
     
     重要: 各テキストフィールド（location, context, details, countermeasure）は必ず100字以内で記述してください。
+    原因の説明文（cause_environment, cause_equipment, cause_guidance, cause_self）は、選択された分類（category_index）に対応するもののみ記入してください。
     """
     return prompt

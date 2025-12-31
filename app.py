@@ -1235,6 +1235,49 @@ def render_daily_report_form():
             
             st.markdown("---")
             
+            # 原因の説明文セクション
+            st.markdown("##### 📝 原因の説明 *")
+            st.caption("各カテゴリーに該当する原因の説明文を記入してください")
+            
+            # 4つのカテゴリーそれぞれに説明文入力欄を追加
+            hiyari_cause_environment = st.text_area(
+                "環境に問題があった",
+                key="hiyari_cause_environment",
+                placeholder="例: 床が滑りやすかった、照明が暗かったなど",
+                value=st.session_state.get("hiyari_cause_environment", ""),
+                help="環境に関する問題の説明を記入してください",
+                height=100
+            )
+            
+            hiyari_cause_equipment = st.text_area(
+                "設備・機器等に問題があった",
+                key="hiyari_cause_equipment",
+                placeholder="例: 遊具が壊れていた、機器の操作が複雑だったなど",
+                value=st.session_state.get("hiyari_cause_equipment", ""),
+                help="設備・機器に関する問題の説明を記入してください",
+                height=100
+            )
+            
+            hiyari_cause_guidance = st.text_area(
+                "指導方法に問題があった",
+                key="hiyari_cause_guidance",
+                placeholder="例: 指示が不十分だった、声かけのタイミングが悪かったなど",
+                value=st.session_state.get("hiyari_cause_guidance", ""),
+                help="指導方法に関する問題の説明を記入してください",
+                height=100
+            )
+            
+            hiyari_cause_self = st.text_area(
+                "自分自身に問題があった",
+                key="hiyari_cause_self",
+                placeholder="例: 注意力が散漫だった、体調不良だったなど",
+                value=st.session_state.get("hiyari_cause_self", ""),
+                help="自分自身に関する問題の説明を記入してください",
+                height=100
+            )
+            
+            st.markdown("---")
+            
             # 分類セクション
             st.markdown("##### 📂 分類 *")
             st.caption("ヒヤリハットの原因となった分類を選択してください")
@@ -1829,6 +1872,25 @@ def render_daily_report_form():
                     errors.append("❌ **分類**を選択してください")
                     error_details.append("→ フォーム外の「📋 ヒヤリハット報告詳細」セクションの「📂 分類 *」から選択してください")
                 
+                # 選択された分類に対応する原因の説明文が入力されているか確認
+                hiyari_cause_environment = st.session_state.get("hiyari_cause_environment", "")
+                hiyari_cause_equipment = st.session_state.get("hiyari_cause_equipment", "")
+                hiyari_cause_guidance = st.session_state.get("hiyari_cause_guidance", "")
+                hiyari_cause_self = st.session_state.get("hiyari_cause_self", "")
+                
+                cause_descriptions = {
+                    0: ("環境に問題があった", hiyari_cause_environment),
+                    1: ("設備・機器等に問題があった", hiyari_cause_equipment),
+                    2: ("指導方法に問題があった", hiyari_cause_guidance),
+                    3: ("自分自身に問題があった", hiyari_cause_self)
+                }
+                
+                if category_index != -1:
+                    category_name, cause_description = cause_descriptions[category_index]
+                    if not cause_description or not cause_description.strip():
+                        errors.append(f"❌ **{category_name}**の説明文を入力してください")
+                        error_details.append(f"→ フォーム外の「📋 ヒヤリハット報告詳細」セクションの「📝 原因の説明 *」で「{category_name}」の説明文を入力してください")
+                
                 if not hiyari_countermeasure:
                     errors.append("❌ **教訓・対策**を入力してください")
                     error_details.append("→ フォーム内の「教訓・対策 *」に入力するか、AIアシスト機能を使用してください")
@@ -1861,6 +1923,10 @@ def render_daily_report_form():
                             "details": hiyari_details,
                             "cause_indices": selected_causes,
                             "category_index": category_index,
+                            "cause_environment": hiyari_cause_environment,
+                            "cause_equipment": hiyari_cause_equipment,
+                            "cause_guidance": hiyari_cause_guidance,
+                            "cause_self": hiyari_cause_self,
                             "countermeasure": hiyari_countermeasure
                         }
                         

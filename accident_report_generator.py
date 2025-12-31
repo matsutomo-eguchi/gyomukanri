@@ -676,12 +676,32 @@ class AccidentReportGenerator:
             c.setFont(self.font_reg, 10)
             instruction_y = checklist_cell_y - 3 * mm
             c.drawString(checklist_cell_x, instruction_y, instruction_text)
-            instruction_y -= font_height + line_spacing
+            
+            # チェックリストの配置範囲を計算
+            # 説明文の下からセルの最下部まで
+            checklist_top = instruction_y - font_height - line_spacing - 3 * mm  # 説明文の下に少し余裕
+            checklist_bottom = cause_row_y_bottom + 6  # パディング考慮（下から6pt）
+            
+            # 12項目を均等に配置するための計算
+            num_items = 12
+            # 上下のパディング（少し余裕を持たせる）
+            vertical_padding = 3 * mm
+            
+            # 選択肢1のY位置（最上部から少し下げる）
+            first_item_y = checklist_top - vertical_padding
+            # 選択肢12のY位置（最下部から少し上げる）
+            last_item_y = checklist_bottom + vertical_padding
+            
+            # 選択肢1と12の間の距離
+            total_spacing = first_item_y - last_item_y
+            # 11個の間隔で均等に分割（選択肢1と12の間には11個の間隔がある）
+            item_spacing = total_spacing / 11
             
             # 各チェックリスト項目を描画
             c.setFont(self.font_reg, font_size_pt)
             for i in range(1, 13):
-                item_y = instruction_y - (i - 1) * (font_height + line_spacing)
+                # 各項目のY位置を計算（選択肢1を最上部、選択肢12を最下部に均等配置）
+                item_y = first_item_y - (i - 1) * item_spacing
                 
                 # 番号を描画（右寄せ、幅25px）
                 num_text = str(i)
