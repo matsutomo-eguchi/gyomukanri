@@ -330,10 +330,10 @@ class AIHelper:
                 title_success, title = self.generate_title_from_text(meeting_data["議題・内容"])
                 if title_success and title:
                     # 強制的に「の件」形式に変換（最終的な保証）
-                    meeting_data["タイトル"] = self._ensure_title_format(title, meeting_data["議題・内容"])
+                    meeting_data["タイトル"] = self.ensure_title_format(title, meeting_data["議題・内容"])
                 else:
                     # フォールバック: 簡易的にタイトルを生成（必ず「の件」形式）
-                    meeting_data["タイトル"] = self._ensure_title_format("", meeting_data["議題・内容"])
+                    meeting_data["タイトル"] = self.ensure_title_format("", meeting_data["議題・内容"])
             
             return True, meeting_data
             
@@ -350,15 +350,15 @@ class AIHelper:
                 title_success, title = self.generate_title_from_text(meeting_data["議題・内容"])
                 if title_success and title:
                     # 強制的に「の件」形式に変換（最終的な保証）
-                    meeting_data["タイトル"] = self._ensure_title_format(title, meeting_data["議題・内容"])
+                    meeting_data["タイトル"] = self.ensure_title_format(title, meeting_data["議題・内容"])
                 else:
                     # フォールバック: 簡易的にタイトルを生成（必ず「の件」形式）
-                    meeting_data["タイトル"] = self._ensure_title_format("", meeting_data["議題・内容"])
+                    meeting_data["タイトル"] = self.ensure_title_format("", meeting_data["議題・内容"])
             return True, meeting_data
         except Exception as e:
             return False, f"議事録生成エラー: {str(e)}"
     
-    def _ensure_title_format(self, title: str, source_text: str = "") -> str:
+    def ensure_title_format(self, title: str, source_text: str = "") -> str:
         """
         タイトルが必ず「の件」形式になることを保証する（最終的な強制処理）
         
@@ -455,7 +455,7 @@ class AIHelper:
                     break
             
             # 強制的に「の件」形式に変換（最終的な保証）
-            title = self._ensure_title_format(title, text.strip())
+            title = self.ensure_title_format(title, text.strip())
             
             return True, title
         
@@ -558,17 +558,21 @@ class AIHelper:
                 raw_title = result["choices"][0]["message"]["content"].strip()
                 
                 # 強制的に「の件」形式に変換（最終的な保証）
-                title = self._ensure_title_format(raw_title, text_preview)
+                title = self.ensure_title_format(raw_title, text_preview)
+                
+                # 最終確認: 必ず「の件」で終わることを確認（二重チェック）
+                if not title.endswith("の件"):
+                    title = self.ensure_title_format("", text.strip())
                 
                 return True, title
             else:
                 # APIエラーの場合は簡易的にタイトルを生成（必ず「の件」で終わる）
-                title = self._ensure_title_format("", text.strip())
+                title = self.ensure_title_format("", text.strip())
                 return True, title
                 
         except Exception as e:
             # エラーの場合は簡易的にタイトルを生成（必ず「の件」で終わる）
-            title = self._ensure_title_format("", text.strip())
+            title = self.ensure_title_format("", text.strip())
             return True, title
     
     def improve_text(self, text: str) -> tuple:
