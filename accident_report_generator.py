@@ -265,10 +265,12 @@ class AccidentReportGenerator:
             content_width * 0.20,  # 管理者
         ]
         
+        # ヘッダーテーブルの高さ（HTMLでは60px、約15.9mm）
+        px_to_mm = 0.264583
         header_table = Table(
             header_table_data,
             colWidths=header_col_widths,
-            rowHeights=[60 * mm]  # 高さ60px相当
+            rowHeights=[60 * px_to_mm * mm]  # 高さ60px
         )
         
         header_table_style = TableStyle([
@@ -286,7 +288,8 @@ class AccidentReportGenerator:
         header_table.setStyle(header_table_style)
         header_w, header_h = header_table.wrapOn(c, content_width, content_height)
         header_table.drawOn(c, start_x, current_y - header_h)
-        current_y -= header_h + 5 * mm
+        # HTMLではmargin-bottom: 20px（約5.3mm）
+        current_y -= header_h + 5.3 * mm
         
         # ===== 情報テーブル（第1行） =====
         # 報告内容、報告者氏名、記録日
@@ -357,7 +360,8 @@ class AccidentReportGenerator:
         info_row1_table.setStyle(info_row1_style)
         info_row1_w, info_row1_h = info_row1_table.wrapOn(c, content_width, content_height)
         info_row1_table.drawOn(c, start_x, current_y - info_row1_h)
-        current_y -= info_row1_h + 5 * mm
+        # HTMLではmargin-bottom: 20px（約5.3mm）
+        current_y -= info_row1_h + 5.3 * mm
         
         # ===== 情報テーブル（第2行） =====
         # 事故発生日時、発生場所、対象者
@@ -409,10 +413,11 @@ class AccidentReportGenerator:
         info_row2_table.setStyle(info_row2_style)
         info_row2_w, info_row2_h = info_row2_table.wrapOn(c, content_width, content_height)
         info_row2_table.drawOn(c, start_x, current_y - info_row2_h)
-        current_y -= info_row2_h + 5 * mm
+        # HTMLではmargin-bottom: 20px（約5.3mm）
+        current_y -= info_row2_h + 5.3 * mm
         
         # ===== 本文テーブル =====
-        # 横書きカテゴリと横書き内容
+        # 縦書きカテゴリと横書き内容
         # situationとprocessを統合
         situation_text = data.get("situation", "")
         process_text = data.get("process", "")
@@ -421,47 +426,50 @@ class AccidentReportGenerator:
         else:
             situation_full = situation_text
         
-        # 横書きカテゴリのテキスト
-        horizontal_labels = [
+        body_table_data = [
+            [
+                "",  # 縦書きテキストは後で描画
+                Paragraph(situation_full, self.para_style)
+            ],
+            [
+                "",
+                Paragraph(data.get("cause", ""), self.para_style)
+            ],
+            [
+                "",
+                Paragraph(data.get("countermeasure", ""), self.para_style)
+            ],
+            [
+                "",
+                Paragraph(data.get("others", ""), self.para_style)
+            ]
+        ]
+        
+        # 縦書きカテゴリのテキスト
+        vertical_labels = [
             "事故発生状況と経過",
             "事故原因",
             "対　策",
             "その他"
         ]
         
-        body_table_data = [
-            [
-                Paragraph(horizontal_labels[0], self.body_label_style),
-                Paragraph(situation_full, self.para_style)
-            ],
-            [
-                Paragraph(horizontal_labels[1], self.body_label_style),
-                Paragraph(data.get("cause", ""), self.para_style)
-            ],
-            [
-                Paragraph(horizontal_labels[2], self.body_label_style),
-                Paragraph(data.get("countermeasure", ""), self.para_style)
-            ],
-            [
-                Paragraph(horizontal_labels[3], self.body_label_style),
-                Paragraph(data.get("others", ""), self.para_style)
-            ]
-        ]
-        
-        # 本文テーブルの列幅（ラベルカラム: 適切な幅、内容カラム: 残り）
-        # HTMLでは左列が50px相当だが、横書きの場合はもう少し広くする
-        label_col_width = 60 * mm  # 横書きラベル用の幅
+        # 本文テーブルの列幅（HTMLでは左列が50px、約13.2mm）
+        # 50px = 50 * 0.264583mm ≈ 13.2mm
+        label_col_width = 13.2 * mm  # HTMLの50pxに合わせる
         body_col_widths = [
-            label_col_width,  # 横書きカテゴリ
+            label_col_width,  # 縦書きカテゴリ
             content_width - label_col_width - 1.0 * 2,  # 内容（境界線分を引く、2px = 約1.0mm）
         ]
         
-        # 行の高さ（HTMLのheightに合わせる）
+        # 行の高さ（HTMLのheightに合わせる、1px ≈ 0.264583mm）
+        # HTMLではテキストエリアの高さが指定されているが、セル全体の高さはパディングを含む
+        # padding: 15px 5px なので、上下パディング30px（約7.9mm）を考慮
+        px_to_mm = 0.264583
         body_row_heights = [
-            180 * mm / 3.78,  # 180px → mm（1px ≈ 0.264mm）
-            120 * mm / 3.78,  # 120px
-            120 * mm / 3.78,  # 120px
-            80 * mm / 3.78,   # 80px
+            (180 + 30) * px_to_mm * mm,  # 180px + パディング30px
+            (120 + 30) * px_to_mm * mm,  # 120px + パディング30px
+            (120 + 30) * px_to_mm * mm,  # 120px + パディング30px
+            (80 + 30) * px_to_mm * mm,   # 80px + パディング30px
         ]
         
         body_table = Table(
@@ -473,7 +481,7 @@ class AccidentReportGenerator:
         body_table_style = TableStyle([
             ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # ラベルカラム中央
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # 縦書きカラム中央
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),    # 内容左
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
             ('RIGHTPADDING', (0, 0), (-1, -1), 5),
@@ -487,8 +495,44 @@ class AccidentReportGenerator:
         
         body_table.setStyle(body_table_style)
         body_w, body_h = body_table.wrapOn(c, content_width, content_height)
-        body_table.drawOn(c, start_x, current_y - body_h)
-        current_y -= body_h + 10 * mm
+        body_table_y = current_y - body_h
+        body_table.drawOn(c, start_x, body_table_y)
+        
+        # 縦書きテキストを描画
+        # テーブルの各セルの位置を計算（ReportLabのテーブル描画後の座標）
+        # ReportLabのテーブルは下から上に描画されるため、Y座標は下から上に累積
+        table_x = start_x
+        table_y = body_table_y
+        
+        # 各行のY位置を計算（下から上へ）
+        # 最初の行（最下段）から開始
+        cumulative_height = 0
+        for i in range(len(vertical_labels)):
+            # 下から数えてi行目のセルのY位置
+            cell_x = table_x
+            # 下から上に累積高さを計算（境界線の太さも考慮）
+            cell_y = table_y + cumulative_height
+            cell_width = body_col_widths[0]
+            cell_height = body_row_heights[i]
+            
+            # 縦書きテキストを描画（セルの中央に配置）
+            # HTMLではletter-spacing: 0.3emなので、文字間隔を調整
+            self.draw_vertical_text(
+                c,
+                vertical_labels[i],
+                cell_x,
+                cell_y,
+                cell_width,
+                cell_height,
+                self.font_bold,
+                11
+            )
+            
+            # 次の行のために累積高さを更新（境界線の太さ1.0mmも考慮）
+            cumulative_height += body_row_heights[i] + 1.0
+        
+        # HTMLではmargin-bottom: 20px（約5.3mm）
+        current_y -= body_h + 5.3 * mm
         
         # ===== フッター =====
         # 説明文と確認文
