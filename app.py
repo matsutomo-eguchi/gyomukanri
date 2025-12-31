@@ -1159,9 +1159,8 @@ def render_daily_report_form():
                     key="incident_date",
                     help="カレンダーから発生日を選択してください"
                 )
-                # セッション状態に保存
-                st.session_state["incident_date"] = incident_date
                 # 年・月・日を個別にセッション状態に保存（後方互換性のため）
+                # ウィジェットが自動的にセッション状態を管理するため、手動で保存する必要はない
                 st.session_state["incident_year"] = incident_date.year
                 st.session_state["incident_month"] = incident_date.month
                 st.session_state["incident_day"] = incident_date.day
@@ -1275,9 +1274,8 @@ def render_daily_report_form():
                     key="hiyari_date",
                     help="カレンダーから発生日を選択してください"
                 )
-                # セッション状態に保存
-                st.session_state["hiyari_date"] = hiyari_date
                 # 年・月・日を個別にセッション状態に保存（後方互換性のため）
+                # ウィジェットが自動的にセッション状態を管理するため、手動で保存する必要はない
                 st.session_state["hiyari_year"] = hiyari_date.year
                 st.session_state["hiyari_month"] = hiyari_date.month
                 st.session_state["hiyari_day"] = hiyari_date.day
@@ -1791,7 +1789,7 @@ def render_daily_report_form():
                 # 発生日時の取得
                 now = datetime.now()
                 
-                # カレンダーから選択した日付を取得
+                # カレンダーから選択した日付を取得（ウィジェットが自動的にセッション状態を管理）
                 incident_date_selected = st.session_state.get("incident_date", date(now.year, now.month, now.day))
                 if isinstance(incident_date_selected, str):
                     try:
