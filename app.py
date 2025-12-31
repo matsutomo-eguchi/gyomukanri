@@ -1333,6 +1333,15 @@ def render_daily_report_form():
                 help="ヒヤリハットが発生した場所を入力してください"
             )
             
+            # 対象者
+            hiyari_subject = st.multiselect(
+                "対象者 *（複数選択可）",
+                options=st.session_state.data_manager.get_active_users(),
+                key="hiyari_subject",
+                default=st.session_state.get("hiyari_subject", []),
+                help="対象となる児童を複数選択できます。PDF出力時は「、」で区切られます。"
+            )
+            
             st.markdown("---")
             
             # 原因チェックリストセクション
@@ -2038,6 +2047,7 @@ def render_daily_report_form():
                 # 基本情報の取得
                 hiyari_reporter = st.session_state.get("hiyari_reporter", "")
                 hiyari_location = st.session_state.get("hiyari_location", "")
+                hiyari_subject = st.session_state.get("hiyari_subject", [])
                 
                 # 基本情報のバリデーション
                 if not hiyari_reporter:
@@ -2047,6 +2057,10 @@ def render_daily_report_form():
                 if not hiyari_location:
                     errors.append("❌ **発生場所**を入力してください")
                     error_details.append("→ フォーム外の「📋 ヒヤリハット報告詳細」セクションの「📍 基本情報」で「発生場所 *」に入力してください")
+                
+                if not hiyari_subject:
+                    errors.append("❌ **対象者**を選択してください")
+                    error_details.append("→ フォーム外の「📋 ヒヤリハット報告詳細」セクションの「📍 基本情報」で「対象者 *（複数選択可）」から選択してください")
                 
                 if not hiyari_context:
                     errors.append("❌ **どうしていた時**を入力してください")
@@ -2127,10 +2141,17 @@ def render_daily_report_form():
                             # 無効な日付の場合は現在の日時を使用
                             incident_datetime = datetime.now()
                         
+                        # 対象者名を文字列に変換（複数の場合は「、」で区切る）
+                        if isinstance(hiyari_subject, list):
+                            subject_name_str = "、".join(hiyari_subject) if hiyari_subject else ""
+                        else:
+                            subject_name_str = str(hiyari_subject) if hiyari_subject else ""
+                        
                         # PDF生成用のデータを準備
                         pdf_data = {
                             "datetime": incident_datetime.strftime("%Y-%m-%d %H:%M:%S"),
                             "location": hiyari_location,
+                            "subject_name": subject_name_str,
                             "context": hiyari_context,
                             "details": hiyari_details,
                             "cause_indices": selected_causes,
