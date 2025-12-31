@@ -452,7 +452,14 @@ def render_ai_assistant(text_area_key: str, child_name: Optional[str] = None):
 def render_daily_comment_ai_assistant(text_area_key: str):
     """日報コメント用AI文章生成アシストUI"""
     st.markdown("#### 🤖 AI日報コメント生成アシスト")
-    
+
+    # ウィジェット作成前にクリア処理を実行
+    if st.session_state.get(f"clear_inputs_{text_area_key}", False):
+        st.session_state[f"activity_content_{text_area_key}"] = ""
+        st.session_state[f"challenges_{text_area_key}"] = ""
+        st.session_state[f"improvements_{text_area_key}"] = ""
+        st.session_state[f"clear_inputs_{text_area_key}"] = False
+
     activity_content = st.text_area(
         "活動内容",
         height=80,
@@ -481,8 +488,17 @@ def render_daily_comment_ai_assistant(text_area_key: str):
             help="今後の改善点を入力してください"
         )
     
+    # 自動適用のチェックボックス
+    auto_apply = st.checkbox(
+        "生成と同時に自動適用する",
+        value=st.session_state.get(f"auto_apply_{text_area_key}", True),
+        key=f"auto_apply_checkbox_{text_area_key}",
+        help="チェックを入れると、生成されたコメントが自動的に日報コメント欄に反映されます"
+    )
+    st.session_state[f"auto_apply_{text_area_key}"] = auto_apply
+
     generate_btn = st.button("✨ 日報コメント生成", key=f"generate_{text_area_key}", use_container_width=True)
-    
+
     if generate_btn:
         # 入力値の検証
         if not activity_content and not challenges and not improvements:
@@ -496,12 +512,20 @@ def render_daily_comment_ai_assistant(text_area_key: str):
                 )
                 if success:
                     st.session_state[f"generated_text_{text_area_key}"] = result
-                    st.success("日報コメントを生成しました！")
+                    # 自動適用が有効な場合、直接セッション状態に設定
+                    if auto_apply:
+                        st.session_state[text_area_key] = result
+                        st.success("✅ 日報コメントを生成し、自動的に適用しました！")
+                        # 入力フィールドをクリアするためのフラグを設定
+                        st.session_state[f"clear_inputs_{text_area_key}"] = True
+                        st.rerun()
+                    else:
+                        st.success("日報コメントを生成しました！")
                 else:
                     st.error(result)
-    
-    # 生成された文章の表示と適用
-    if f"generated_text_{text_area_key}" in st.session_state:
+
+    # 生成された文章の表示と適用（自動適用が無効な場合のみ表示）
+    if f"generated_text_{text_area_key}" in st.session_state and not auto_apply:
         st.markdown("**生成された日報コメント:**")
         st.text_area(
             "プレビュー",
@@ -518,10 +542,8 @@ def render_daily_comment_ai_assistant(text_area_key: str):
                 st.session_state[text_area_key] = st.session_state[f"generated_text_{text_area_key}"]
                 # 生成されたテキストをクリア
                 del st.session_state[f"generated_text_{text_area_key}"]
-                # 入力フィールドもクリア（オプション）
-                st.session_state[f"activity_content_{text_area_key}"] = ""
-                st.session_state[f"challenges_{text_area_key}"] = ""
-                st.session_state[f"improvements_{text_area_key}"] = ""
+                # 入力フィールドをクリアするためのフラグを設定
+                st.session_state[f"clear_inputs_{text_area_key}"] = True
                 st.rerun()
         with col2:
             if st.button("❌ キャンセル", key=f"cancel_{text_area_key}"):
@@ -1821,14 +1843,19 @@ def render_daily_report_form():
             hiyari_countermeasure = ""
         
         # 日報コメント入力（フォーム内）
+        # セッション状態から値を確実に取得
+        daily_comment_value = st.session_state.get("daily_comment", "")
         daily_comment = st.text_area(
             "日報コメント",
             height=150,
             key="daily_comment",
             placeholder="本日の活動内容、課題、改善点などを記入してください",
             help="AIアシスト機能を使用して文章を作成することもできます",
-            value=st.session_state.get("daily_comment", "")
+            value=daily_comment_value
         )
+        # フォーム内で入力された値をセッション状態に保存（リアルタイム更新）
+        if daily_comment != daily_comment_value:
+            st.session_state["daily_comment"] = daily_comment
         
         st.markdown("---")
         

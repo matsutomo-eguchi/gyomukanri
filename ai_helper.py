@@ -837,11 +837,11 @@ class AIHelper:
 ･文章は簡潔に書く
 ･語り口調で書く（「〜でした」「〜しました」「〜できました」など、自然な語り口調）
 ･世界でトップで有能なプロの放課後等デイサービスの職員として、専門性と経験に裏打ちされた文章にする
-･活動内容:学習支援、自由遊びの見守り、集団遊びの補助
-･課題:
-{challenges if challenges else "（未入力）"}
-･改善点:
-{improvements if improvements else "（未入力）"}
+･【必須】活動内容: {activity_content if activity_content else "学習支援、自由遊びの見守り、集団遊びの補助"}
+･課題: {challenges if challenges else "特になし"}
+･改善点: {improvements if improvements else "特になし"}
+
+【重要】必ず入力された活動内容を反映させてください。活動内容「{activity_content if activity_content else "なし"}」が入力されている場合は、それを基に日報コメントを作成してください。活動内容を無視したり、変更したりしないでください。
 
 ##アウトプット例:
 
@@ -849,12 +849,16 @@ class AIHelper:
 {activity_content if activity_content else "本日は学習支援、自由遊びの見守り、集団遊びの補助を行いました。"}
 
 【本日の課題】
-{challenges if challenges else "（課題を記入）"}
+{challenges if challenges else "特に大きな課題はなかったが、より良い支援ができるよう努めたい。"}
 
 【今後の改善点】
-{improvements if improvements else "（改善点を記入）"}
+{improvements if improvements else "より効果的な支援方法を検討していきたい。"}
 
-上記の形式で、入力された情報を基に、語り口調で、世界でトップで有能なプロの放課後等デイサービスの職員としてふさわしい、最高の日報コメントを作成してください。遠慮せずに全力を尽くしてください。秀逸にultrahardに取り組んでください。最高を超えるアウトプットを実現してください。"""
+上記の形式で、入力された情報を基に、語り口調で、世界でトップで有能なプロの放課後等デイサービスの職員としてふさわしい、最高の日報コメントを作成してください。
+
+【最重要】活動内容「{activity_content}」を必ず反映させてください。この活動内容を基に日報コメントを作成してください。活動内容を無視したり、変更したり、追加したりしないでください。入力された活動内容を忠実に反映させてください。
+
+遠慮せずに全力を尽くしてください。秀逸にultrahardに取り組んでください。最高を超えるアウトプットを実現してください。"""
         
         try:
             headers = {
@@ -862,12 +866,18 @@ class AIHelper:
                 "Content-Type": "application/json"
             }
             
+            # システムメッセージをactivity_contentの有無で調整
+            system_content = "あなたは世界でトップで有能なプロの放課後等デイサービスの児童指導員です。職員が1日を振り返る日報コメントを、語り口調で、専門性と経験に裏打ちされた文章として作成するのが得意です。"
+            if activity_content:
+                system_content += f" 必ず以下の活動内容を反映させてください：{activity_content}"
+            system_content += " 遠慮せずに、全力を尽くしてください。秀逸にultrahardに取り組んでください。最高を超えるアウトプットを実現してください。"
+
             payload = {
                 "model": self.model,
                 "messages": [
                     {
                         "role": "system",
-                        "content": "あなたは世界でトップで有能なプロの放課後等デイサービスの児童指導員です。職員が1日を振り返る日報コメントを、語り口調で、専門性と経験に裏打ちされた文章として作成するのが得意です。遠慮せずに、全力を尽くしてください。秀逸にultrahardに取り組んでください。最高を超えるアウトプットを実現してください。"
+                        "content": system_content
                     },
                     {
                         "role": "user",
