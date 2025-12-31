@@ -2490,26 +2490,96 @@ def render_settings():
     # データエクスポート
     st.markdown('<div class="section-header">📊 データ管理</div>', unsafe_allow_html=True)
     
+    # 全データのエクスポート/インポート
+    st.markdown("#### 📦 全データのエクスポート・インポート")
+    st.info("💡 アプリを更新・リブートする前に、全データをエクスポートしてバックアップを取ることをお勧めします。")
+    
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### 日報データのエクスポート")
-        if st.button("CSV形式でダウンロード"):
+        st.markdown("##### 📤 データのエクスポート")
+        st.markdown("すべてのデータ（利用者マスタ、日報、設定など）をZIPファイルにエクスポートします。")
+        
+        if st.button("📥 全データをエクスポート", use_container_width=True, type="primary"):
+            with st.spinner("データをエクスポート中..."):
+                export_path = st.session_state.data_manager.export_all_data()
+                if export_path:
+                    export_file = Path(export_path)
+                    if export_file.exists():
+                        with open(export_file, 'rb') as f:
+                            st.download_button(
+                                label="💾 ZIPファイルをダウンロード",
+                                data=f.read(),
+                                file_name=export_file.name,
+                                mime="application/zip",
+                                use_container_width=True
+                            )
+                        st.success(f"✅ エクスポート完了: {export_file.name}")
+                    else:
+                        st.error("エクスポートファイルが見つかりません")
+                else:
+                    st.error("エクスポートに失敗しました")
+    
+    with col2:
+        st.markdown("##### 📥 データのインポート")
+        st.markdown("エクスポートしたZIPファイルからデータを復元します。")
+        st.warning("⚠️ インポートすると既存のデータが上書きされる可能性があります。")
+        
+        uploaded_file = st.file_uploader(
+            "ZIPファイルを選択",
+            type=['zip'],
+            key="import_zip_file",
+            help="エクスポートしたZIPファイルを選択してください"
+        )
+        
+        if uploaded_file is not None:
+            col_a, col_b = st.columns(2)
+            with col_a:
+                overwrite = st.checkbox("既存データを上書き", value=False, key="import_overwrite")
+            
+            if st.button("📤 データをインポート", use_container_width=True, type="primary"):
+                # アップロードされたファイルを一時ファイルに保存
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    tmp_path = tmp_file.name
+                
+                try:
+                    with st.spinner("データをインポート中..."):
+                        success = st.session_state.data_manager.import_all_data(tmp_path, overwrite=overwrite)
+                        if success:
+                            st.success("✅ インポートが完了しました。ページをリロードしてください。")
+                            st.info("ページをリロードするには、ブラウザの更新ボタンを押すか、サイドバーの「設定」を再度選択してください。")
+                        else:
+                            st.error("インポートに失敗しました")
+                finally:
+                    # 一時ファイルを削除
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+    
+    st.markdown("---")
+    
+    # 日報データのCSVエクスポート（既存機能）
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 📄 日報データのエクスポート（CSV形式）")
+        if st.button("CSV形式でダウンロード", use_container_width=True):
             df = st.session_state.data_manager.get_reports()
             if not df.empty:
                 csv = df.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
-                    label="📥 ダウンロード",
+                    label="📥 CSVをダウンロード",
                     data=csv,
                     file_name=f"daily_reports_{date.today().isoformat()}.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    use_container_width=True
                 )
             else:
                 st.warning("エクスポートするデータがありません")
     
     with col2:
-        st.markdown("#### データの確認")
-        if st.button("日報データを表示"):
+        st.markdown("#### 📊 データの確認")
+        if st.button("日報データを表示", use_container_width=True):
             df = st.session_state.data_manager.get_reports()
             if not df.empty:
                 st.dataframe(df, use_container_width=True)

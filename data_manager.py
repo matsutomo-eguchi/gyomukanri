@@ -13,6 +13,7 @@ import json
 import os
 import hashlib
 import shutil
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
@@ -1546,5 +1547,159 @@ class DataManager:
             return True
         except Exception as e:
             print(f"バックアップ復元エラー: {e}")
+            return False
+    
+    def export_all_data(self, export_path: Optional[str] = None) -> Optional[str]:
+        """
+        すべてのデータをZIPファイルにエクスポート
+        
+        Args:
+            export_path: エクスポート先のパス（指定しない場合は一時ファイル）
+            
+        Returns:
+            エクスポートされたZIPファイルのパス（失敗時はNone）
+        """
+        try:
+            # エクスポート先のパスを決定
+            if export_path is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                export_path = str(self.data_dir / f"data_export_{timestamp}.zip")
+            
+            export_file = Path(export_path)
+            
+            # ZIPファイルを作成
+            with zipfile.ZipFile(export_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # すべてのデータファイルをZIPに追加
+                data_files = [
+                    self.master_file,
+                    self.report_file,
+                    self.tags_file,
+                    self.config_file,
+                    self.staff_accounts_file,
+                    self.morning_meeting_file,
+                    self.daily_users_file,
+                    self.version_file
+                ]
+                
+                for file_path in data_files:
+                    if file_path.exists():
+                        # ファイルをZIPに追加（data/ディレクトリ内の相対パスを保持）
+                        zipf.write(file_path, file_path.name)
+                
+                # reportsディレクトリ内のすべてのファイルを追加
+                if self.reports_dir.exists():
+                    for report_file in self.reports_dir.glob("*.md"):
+                        zipf.write(report_file, f"reports/{report_file.name}")
+                
+                # エクスポートメタデータを追加
+                metadata = {
+                    "export_date": datetime.now().isoformat(),
+                    "schema_version": self.SCHEMA_VERSION,
+                    "data_dir": str(self.data_dir),
+                    "exported_files": [
+                        f.name for f in data_files if f.exists()
+                    ]
+                }
+                metadata_json = json.dumps(metadata, ensure_ascii=False, indent=2)
+                zipf.writestr("export_metadata.json", metadata_json)
+            
+            return str(export_file)
+        except Exception as e:
+            print(f"データエクスポートエラー: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def import_all_data(self, import_file_path: str, overwrite: bool = False) -> bool:
+        """
+        ZIPファイルからすべてのデータをインポート
+        
+        Args:
+            import_file_path: インポートするZIPファイルのパス
+            overwrite: 既存データを上書きするか（Falseの場合は既存データを保護）
+            
+        Returns:
+            成功した場合True
+        """
+        try:
+            import_file = Path(import_file_path)
+            if not import_file.exists():
+                print(f"インポートファイルが見つかりません: {import_file_path}")
+                return False
+            
+            # インポート前に現在のデータをバックアップ
+            if not overwrite:
+                self.create_backup()
+            
+            # ZIPファイルを一時ディレクトリに展開
+            temp_dir = self.data_dir / "temp_import"
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+            temp_dir.mkdir(exist_ok=True)
+            
+            try:
+                # ZIPファイルを展開
+                with zipfile.ZipFile(import_file, 'r') as zipf:
+                    zipf.extractall(temp_dir)
+                
+                # メタデータを確認
+                metadata_file = temp_dir / "export_metadata.json"
+                if metadata_file.exists():
+                    with open(metadata_file, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                        print(f"インポートデータのエクスポート日時: {metadata.get('export_date', '不明')}")
+                        print(f"スキーマバージョン: {metadata.get('schema_version', '不明')}")
+                
+                # データファイルをインポート
+                data_files = [
+                    ("users_master.json", self.master_file),
+                    ("daily_reports.csv", self.report_file),
+                    ("tags_master.json", self.tags_file),
+                    ("config.json", self.config_file),
+                    ("staff_accounts.json", self.staff_accounts_file),
+                    ("morning_meetings.json", self.morning_meeting_file),
+                    ("daily_users.json", self.daily_users_file),
+                    (".schema_version", self.version_file)
+                ]
+                
+                imported_files = []
+                for source_name, target_file in data_files:
+                    source_file = temp_dir / source_name
+                    if source_file.exists():
+                        if overwrite or not target_file.exists():
+                            shutil.copy2(source_file, target_file)
+                            imported_files.append(source_name)
+                        else:
+                            print(f"既存データを保護: {source_name} はスキップされました")
+                
+                # reportsディレクトリをインポート
+                temp_reports_dir = temp_dir / "reports"
+                if temp_reports_dir.exists():
+                    if overwrite and self.reports_dir.exists():
+                        shutil.rmtree(self.reports_dir)
+                    if not self.reports_dir.exists():
+                        self.reports_dir.mkdir(exist_ok=True)
+                    
+                    for report_file in temp_reports_dir.glob("*.md"):
+                        target_report = self.reports_dir / report_file.name
+                        if overwrite or not target_report.exists():
+                            shutil.copy2(report_file, target_report)
+                            imported_files.append(f"reports/{report_file.name}")
+                
+                print(f"インポート完了: {len(imported_files)} ファイルをインポートしました")
+                
+                # データ整合性チェック
+                self._verify_data_integrity()
+                
+                return True
+            finally:
+                # 一時ディレクトリを削除
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir)
+            
+        except Exception as e:
+            print(f"データインポートエラー: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
