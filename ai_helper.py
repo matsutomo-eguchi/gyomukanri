@@ -329,18 +329,11 @@ class AIHelper:
             if "議題・内容" in meeting_data and meeting_data["議題・内容"]:
                 title_success, title = self.generate_title_from_text(meeting_data["議題・内容"])
                 if title_success and title:
-                    # 最終確認: 必ず「の件」で終わることを確認
-                    if not title.endswith("の件"):
-                        title = title + "の件"
-                    meeting_data["タイトル"] = title
+                    # 強制的に「の件」形式に変換（最終的な保証）
+                    meeting_data["タイトル"] = self._ensure_title_format(title, meeting_data["議題・内容"])
                 else:
-                    # フォールバック: 簡易的にタイトルを生成
-                    agenda_text = meeting_data["議題・内容"][:18]
-                    for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・']:
-                        if delimiter in agenda_text:
-                            agenda_text = agenda_text.split(delimiter)[0]
-                            break
-                    meeting_data["タイトル"] = agenda_text + "の件"
+                    # フォールバック: 簡易的にタイトルを生成（必ず「の件」形式）
+                    meeting_data["タイトル"] = self._ensure_title_format("", meeting_data["議題・内容"])
             
             return True, meeting_data
             
@@ -356,21 +349,87 @@ class AIHelper:
             if meeting_data["議題・内容"]:
                 title_success, title = self.generate_title_from_text(meeting_data["議題・内容"])
                 if title_success and title:
-                    # 最終確認: 必ず「の件」で終わることを確認
-                    if not title.endswith("の件"):
-                        title = title + "の件"
-                    meeting_data["タイトル"] = title
+                    # 強制的に「の件」形式に変換（最終的な保証）
+                    meeting_data["タイトル"] = self._ensure_title_format(title, meeting_data["議題・内容"])
                 else:
-                    # フォールバック: 簡易的にタイトルを生成
-                    agenda_text = meeting_data["議題・内容"][:18]
-                    for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・']:
-                        if delimiter in agenda_text:
-                            agenda_text = agenda_text.split(delimiter)[0]
-                            break
-                    meeting_data["タイトル"] = agenda_text + "の件"
+                    # フォールバック: 簡易的にタイトルを生成（必ず「の件」形式）
+                    meeting_data["タイトル"] = self._ensure_title_format("", meeting_data["議題・内容"])
             return True, meeting_data
         except Exception as e:
             return False, f"議事録生成エラー: {str(e)}"
+    
+    def _ensure_title_format(self, title: str, source_text: str = "") -> str:
+        """
+        タイトルが必ず「の件」形式になることを保証する（最終的な強制処理）
+        
+        Args:
+            title: 処理前のタイトル
+            source_text: 元のテキスト（フォールバック用）
+            
+        Returns:
+            「の件」形式で終わるタイトル
+        """
+        if not title or not title.strip():
+            # タイトルが空の場合は、元のテキストから生成
+            if source_text:
+                title = source_text.strip()[:18]
+                for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・', 'について', 'に関して']:
+                    if delimiter in title:
+                        title = title.split(delimiter)[0]
+                        break
+            else:
+                title = "議事録の件"
+        
+        # 余分な文字を削除
+        title = title.strip()
+        title = title.replace('"', '').replace("'", '').replace('「', '').replace('」', '').replace('【', '').replace('】', '').replace('（', '').replace('）', '').replace('(', '').replace(')', '')
+        title = ' '.join(title.split())
+        title = title.replace('\n', '').replace('\r', '').replace('\t', '')
+        
+        # 説明文や補足を削除
+        for marker in ['例:', '注意:', '出力:', 'タイトル:', '件名:', '件:', '：', ':', '出力例', '例文']:
+            if marker in title:
+                title = title.split(marker)[-1].strip()
+        
+        # 「の件」が途中にある場合は、その前の部分を取得
+        if "の件" in title and not title.endswith("の件"):
+            parts = title.split("の件")
+            if parts[0]:
+                title = parts[0] + "の件"
+            else:
+                title = "の件"
+        
+        # 20文字以内に制限（「の件」を含む）
+        if len(title) > 20:
+            if title.endswith("の件"):
+                main_part = title[:-2]
+                if len(main_part) > 18:
+                    main_part = main_part[:18]
+                title = main_part + "の件"
+            else:
+                title = title[:18] + "の件"
+        
+        # 最終確認: 必ず「の件」で終わることを強制
+        if not title.endswith("の件"):
+            # 「の件」を除いた部分を取得
+            if "の件" in title:
+                title = title.split("の件")[0] + "の件"
+            else:
+                title = title + "の件"
+        
+        # 空文字列や「の件」だけの場合はフォールバック
+        if not title or title == "の件" or len(title) < 3:
+            if source_text:
+                fallback = source_text.strip()[:18]
+                for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・', 'について', 'に関して']:
+                    if delimiter in fallback:
+                        fallback = fallback.split(delimiter)[0]
+                        break
+                title = fallback + "の件" if fallback else "議事録の件"
+            else:
+                title = "議事録の件"
+        
+        return title
     
     def generate_title_from_text(self, text: str) -> tuple:
         """
@@ -395,16 +454,8 @@ class AIHelper:
                     title = title.split(delimiter)[0]
                     break
             
-            # 必ず「の件」で終わるようにする
-            if not title.endswith("の件"):
-                title = title + "の件"
-            
-            # 20文字以内に制限（「の件」を含む）
-            if len(title) > 20:
-                main_part = title[:-2]
-                if len(main_part) > 18:
-                    main_part = main_part[:18]
-                title = main_part + "の件"
+            # 強制的に「の件」形式に変換（最終的な保証）
+            title = self._ensure_title_format(title, text.strip())
             
             return True, title
         
@@ -418,32 +469,44 @@ class AIHelper:
                 text_preview = text_preview.split(delimiter)[0]
                 break
         
-        prompt = f"""#命令書（絶対遵守）
+        prompt = f"""#命令書（絶対遵守・違反不可）
 あなたは、世界でトップで優秀な、プロのタイトル生成の専門家です。遠慮せずに、全力を尽くしてください。秀逸にultrahardに取り組んでください。
 
-##最重要ルール（絶対遵守）:
-1. 出力は必ず「○○の件」という形式で終わること（「の件」で終わらない場合は無効）
-2. 「の件」以外の文字列は一切返さないこと
-3. タイトルのみを返すこと（説明文、補足、例、注意書きは一切不要）
+##最重要ルール（絶対遵守・違反不可）:
+1. 出力は必ず「○○の件」という形式で終わること（「の件」で終わらない場合は無効・絶対禁止）
+2. 「の件」以外の文字列は一切返さないこと（説明文、補足、例、注意書きは一切不要）
+3. タイトルのみを返すこと（引用符、括弧、改行、空白行は一切不要）
 4. 20文字以内（「の件」を含む）にまとめること
 
-##議題・内容:
+##入力議題・内容:
 {text}
 
-##出力例（この形式のみ有効）:
+##正しい出力例（この形式のみ有効・必ずこの形式で返すこと）:
 利用者送迎に関する件
 スタッフ会議の件
 設備点検の件
 安全確認の件
+利用者対応の件
+送迎業務の件
 
-##禁止事項（絶対に守ること）:
-- 「の件」で終わらないタイトルは返さない
-- 説明文や補足を付けない
-- 引用符や括弧で囲まない
-- 改行を入れない
+##間違った出力例（絶対に返さないこと）:
+利用者送迎について
+スタッフ会議
+設備点検に関する報告
+安全確認についての件名
+「利用者送迎の件」
+【スタッフ会議の件】
 
-##出力:
-タイトルのみを「○○の件」形式で返してください。"""
+##禁止事項（絶対に守ること・違反不可）:
+- 「の件」で終わらないタイトルは返さない（絶対禁止）
+- 説明文や補足を付けない（絶対禁止）
+- 引用符や括弧で囲まない（絶対禁止）
+- 改行を入れない（絶対禁止）
+- 「について」「に関して」などの語尾は使わない（「の件」のみ使用）
+
+##出力指示:
+上記の正しい出力例の形式で、タイトルのみを「○○の件」形式で返してください。
+議題・内容から重要なキーワードを抽出し、「○○の件」という形式で返してください。"""
         
         try:
             headers = {
@@ -456,23 +519,31 @@ class AIHelper:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "あなたは、世界でトップで優秀な、プロのタイトル生成の専門家です。議題・内容から必ず「○○の件」という形式のタイトルを生成します。遠慮せずに、全力を尽くしてください。秀逸にultrahardに取り組んでください。\n\n最重要ルール: タイトルは必ず「の件」で終わる形式で返してください。「の件」で終わらないタイトルは絶対に返さないでください。説明文や補足は一切不要です。タイトルのみを返してください。"
+                        "content": "あなたは、世界でトップで優秀な、プロのタイトル生成の専門家です。議題・内容から必ず「○○の件」という形式のタイトルを生成します。遠慮せずに、全力を尽くしてください。秀逸にultrahardに取り組んでください。\n\n最重要ルール（絶対遵守）: タイトルは必ず「の件」で終わる形式で返してください。「の件」で終わらないタイトルは絶対に返さないでください。説明文や補足は一切不要です。タイトルのみを返してください。引用符、括弧、改行は一切使用しないでください。"
+                    },
+                    {
+                        "role": "user",
+                        "content": "議題: 利用者送迎について話し合った\nタイトルを生成してください。"
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "利用者送迎に関する件"
+                    },
+                    {
+                        "role": "user",
+                        "content": "議題: スタッフ会議で今後の方針を決定した\nタイトルを生成してください。"
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "スタッフ会議の件"
                     },
                     {
                         "role": "user",
                         "content": prompt
-                    },
-                    {
-                        "role": "assistant",
-                        "content": "了解しました。必ず「○○の件」形式でタイトルのみを返します。"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"それでは、以下の議題・内容からタイトルを生成してください。必ず「○○の件」形式で返してください:\n{text_preview}"
                     }
                 ],
-                "temperature": 0.1,
-                "max_tokens": 30
+                "temperature": 0.05,
+                "max_tokens": 25
             }
             
             response = requests.post(
@@ -484,91 +555,20 @@ class AIHelper:
             
             if response.status_code == 200:
                 result = response.json()
-                title = result["choices"][0]["message"]["content"].strip()
+                raw_title = result["choices"][0]["message"]["content"].strip()
                 
-                # 余分な文字を削除（引用符、改行、括弧など）
-                title = title.replace('"', '').replace("'", '').replace('「', '').replace('」', '').replace('【', '').replace('】', '').replace('（', '').replace('）', '').replace('(', '').replace(')', '').strip()
-                
-                # 改行や余分な空白を削除
-                title = ' '.join(title.split())
-                title = title.replace('\n', '').replace('\r', '')
-                
-                # 説明文や補足を削除（「例:」「注意:」などの後の文字列を削除）
-                for marker in ['例:', '注意:', '出力:', 'タイトル:', '件名:', '件:', '：', ':']:
-                    if marker in title:
-                        title = title.split(marker)[-1].strip()
-                
-                # 「の件」が含まれていない場合は必ず追加
-                if not title.endswith("の件"):
-                    # 既に「の件」が途中にある場合は削除して最後に追加
-                    if "の件" in title:
-                        # 「の件」より前の部分を取得
-                        parts = title.split("の件")
-                        if parts[0]:
-                            title = parts[0] + "の件"
-                        else:
-                            # 「の件」だけの場合は、テキストから生成
-                            title = text_preview[:18] + "の件"
-                    else:
-                        # 「の件」がない場合は追加
-                        title = title + "の件"
-                
-                # 20字以内に制限（「の件」を含む）
-                if len(title) > 20:
-                    # 「の件」を除いた部分を18文字以内に
-                    if title.endswith("の件"):
-                        main_part = title[:-2]
-                        if len(main_part) > 18:
-                            main_part = main_part[:18]
-                        title = main_part + "の件"
-                    else:
-                        title = title[:18] + "の件"
-                
-                # 最終確認: 必ず「の件」で終わることを確認
-                if not title.endswith("の件"):
-                    title = title + "の件"
-                
-                # 空文字列の場合はフォールバック
-                if not title or title == "の件":
-                    title = text_preview[:18] + "の件"
+                # 強制的に「の件」形式に変換（最終的な保証）
+                title = self._ensure_title_format(raw_title, text_preview)
                 
                 return True, title
             else:
                 # APIエラーの場合は簡易的にタイトルを生成（必ず「の件」で終わる）
-                title = text.strip()[:18]
-                # 句読点や改行で区切る
-                for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・', 'について', 'に関して']:
-                    if delimiter in title:
-                        title = title.split(delimiter)[0]
-                        break
-                
-                # 20文字以内に制限（「の件」を含む）
-                if len(title) > 18:
-                    title = title[:18]
-                
-                # 必ず「の件」で終わるようにする
-                if not title.endswith("の件"):
-                    title = title + "の件"
-                
+                title = self._ensure_title_format("", text.strip())
                 return True, title
                 
         except Exception as e:
             # エラーの場合は簡易的にタイトルを生成（必ず「の件」で終わる）
-            title = text.strip()[:18]
-            # 句読点や改行で区切る
-            for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・', 'について', 'に関して']:
-                if delimiter in title:
-                    title = title.split(delimiter)[0]
-                    break
-            
-            # 20文字以内に制限（「の件」を含む）
-            if len(title) > 18:
-                title = title[:18]
-            
-            # 必ず「の件」で終わるようにする
-            if not title.endswith("の件"):
-                title = title + "の件"
-            
+            title = self._ensure_title_format("", text.strip())
             return True, title
     
     def improve_text(self, text: str) -> tuple:

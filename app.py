@@ -2171,23 +2171,44 @@ def render_morning_meeting():
                         if agenda and agenda.strip():
                             title_success, title = st.session_state.ai_helper.generate_title_from_text(agenda)
                             if title_success and title:
-                                # 最終確認: 必ず「の件」で終わることを確認
+                                # generate_title_from_textは既に_ensure_title_formatで処理されているが、念のため最終確認
                                 if not title.endswith("の件"):
                                     title = title + "の件"
                                 meeting_data["タイトル"] = title
                             else:
-                                # フォールバック: 簡易的にタイトルを生成
+                                # フォールバック: 簡易的にタイトルを生成（必ず「の件」形式）
                                 agenda_text = agenda[:18]
-                                for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・']:
+                                for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・', 'について', 'に関して']:
                                     if delimiter in agenda_text:
                                         agenda_text = agenda_text.split(delimiter)[0]
                                         break
-                                meeting_data["タイトル"] = agenda_text + "の件"
+                                if not agenda_text.endswith("の件"):
+                                    agenda_text = agenda_text + "の件"
+                                meeting_data["タイトル"] = agenda_text
                     else:
-                        # 既存のタイトルも「の件」形式であることを確認
+                        # 既存のタイトルも「の件」形式であることを確認（強制的に修正）
                         existing_title = meeting_data.get("タイトル", "")
-                        if existing_title and not existing_title.endswith("の件"):
-                            meeting_data["タイトル"] = existing_title + "の件"
+                        if existing_title:
+                            if not existing_title.endswith("の件"):
+                                # 「の件」が途中にある場合は削除して最後に追加
+                                if "の件" in existing_title:
+                                    existing_title = existing_title.split("の件")[0] + "の件"
+                                else:
+                                    existing_title = existing_title + "の件"
+                                meeting_data["タイトル"] = existing_title
+                        else:
+                            # タイトルが空の場合は生成
+                            if agenda and agenda.strip():
+                                title_success, title = st.session_state.ai_helper.generate_title_from_text(agenda)
+                                if title_success and title:
+                                    meeting_data["タイトル"] = title
+                                else:
+                                    agenda_text = agenda[:18]
+                                    for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・', 'について', 'に関して']:
+                                        if delimiter in agenda_text:
+                                            agenda_text = agenda_text.split(delimiter)[0]
+                                            break
+                                    meeting_data["タイトル"] = agenda_text + "の件"
                     
                     if st.session_state.data_manager.save_morning_meeting(meeting_data):
                         st.success("✅ 朝礼議事録を保存しました！")
