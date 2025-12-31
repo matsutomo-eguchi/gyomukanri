@@ -1358,6 +1358,19 @@ class DataManager:
             print(f"日別利用者記録取得エラー: {e}")
             return []
     
+    def get_all_daily_users(self) -> Dict[str, List[str]]:
+        """
+        全期間の利用者記録を取得
+        
+        Returns:
+            日付をキーとした利用者名のリストの辞書
+        """
+        try:
+            return self._load_daily_users()
+        except Exception as e:
+            print(f"全期間利用者記録取得エラー: {e}")
+            return {}
+    
     def create_backup(self) -> Optional[str]:
         """
         データファイルのバックアップを作成

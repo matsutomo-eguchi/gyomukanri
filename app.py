@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from pathlib import Path
 import pandas as pd
 import tempfile
+import calendar
 
 from data_manager import DataManager
 from ai_helper import AIHelper
@@ -277,7 +278,7 @@ def render_sidebar():
         # ページ選択
         page = st.radio(
             "メニュー",
-            ["日報入力", "保存済み日報閲覧", "朝礼議事録", "利用者マスタ管理", "設定"],
+            ["日報入力", "保存済み日報閲覧", "利用者記録閲覧", "朝礼議事録", "利用者マスタ管理", "設定"],
             key="page_selector"
         )
         st.session_state.current_page = page
@@ -1651,6 +1652,166 @@ def render_saved_reports_viewer():
             st.error("日報ファイルの読み込みに失敗しました。")
 
 
+def render_daily_users_calendar():
+    """利用者記録カレンダー閲覧画面の描画"""
+    st.markdown('<div class="main-header">📅 利用者記録閲覧</div>', unsafe_allow_html=True)
+    
+    dm = st.session_state.data_manager
+    
+    # 全期間の利用者記録を取得
+    all_daily_users = dm.get_all_daily_users()
+    
+    if not all_daily_users:
+        st.info("利用者記録が登録されていません。")
+        return
+    
+    st.markdown('<div class="section-header">📅 カレンダー表示</div>', unsafe_allow_html=True)
+    
+    # 月選択
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        selected_year = st.selectbox(
+            "年",
+            options=range(2020, 2030),
+            index=date.today().year - 2020,
+            key="calendar_year"
+        )
+    with col2:
+        selected_month = st.selectbox(
+            "月",
+            options=range(1, 13),
+            index=date.today().month - 1,
+            key="calendar_month"
+        )
+    
+    # カレンダーのヘッダー
+    weekdays = ["月", "火", "水", "木", "金", "土", "日"]
+    
+    # カレンダーグリッドを作成
+    cal = calendar.monthcalendar(selected_year, selected_month)
+    
+    # カレンダーを表示
+    st.markdown(f"### {selected_year}年{selected_month}月")
+    
+    # 曜日ヘッダーを表示
+    header_cols = st.columns(7)
+    for i, weekday in enumerate(weekdays):
+        with header_cols[i]:
+            st.markdown(f"**{weekday}**", unsafe_allow_html=True)
+    
+    # 週ごとに表示
+    for week in cal:
+        cols = st.columns(7)
+        for i, day in enumerate(week):
+            with cols[i]:
+                if day == 0:
+                    st.markdown("")
+                else:
+                    current_date = date(selected_year, selected_month, day)
+                    date_str = current_date.isoformat()
+                    
+                    # その日の利用者記録を取得
+                    users = all_daily_users.get(date_str, [])
+                    user_count = len(users)
+                    
+                    # 日付のスタイルを決定
+                    is_today = current_date == date.today()
+                    has_records = user_count > 0
+                    
+                    # カレンダーセルのスタイル
+                    if is_today:
+                        cell_style = "background-color: #FFE5B4; border: 2px solid #FF6B6B; border-radius: 5px; padding: 8px; min-height: 60px;"
+                    elif has_records:
+                        cell_style = "background-color: #E8F5E9; border: 1px solid #4ECDC4; border-radius: 5px; padding: 8px; min-height: 60px;"
+                    else:
+                        cell_style = "border: 1px solid #E0E0E0; border-radius: 5px; padding: 8px; min-height: 60px;"
+                    
+                    st.markdown(
+                        f'<div style="{cell_style}">',
+                        unsafe_allow_html=True
+                    )
+                    
+                    # 日付を表示
+                    if is_today:
+                        st.markdown(f"**{day}**<br><small>(今日)</small>", unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"**{day}**", unsafe_allow_html=True)
+                    
+                    # 利用者数を表示
+                    if has_records:
+                        st.markdown(f"👥 {user_count}名", unsafe_allow_html=True)
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # 日付を選択して詳細を表示
+    st.markdown('<div class="section-header">📋 詳細表示</div>', unsafe_allow_html=True)
+    
+    # 記録がある日付のリストを作成
+    recorded_dates = []
+    for date_str in sorted(all_daily_users.keys(), reverse=True):
+        try:
+            date_obj = datetime.fromisoformat(date_str).date()
+            if date_obj.year == selected_year and date_obj.month == selected_month:
+                users = all_daily_users[date_str]
+                if users:
+                    recorded_dates.append((date_str, date_obj, users))
+        except:
+            continue
+    
+    if recorded_dates:
+        # 日付選択
+        date_options = {}
+        for date_str, date_obj, users in recorded_dates:
+            display_name = f"{date_obj.strftime('%Y年%m月%d日')} ({len(users)}名)"
+            date_options[display_name] = (date_str, date_obj, users)
+        
+        selected_display = st.selectbox(
+            "日付を選択して詳細を表示",
+            options=list(date_options.keys()),
+            key="selected_date_detail"
+        )
+        
+        if selected_display:
+            date_str, date_obj, users = date_options[selected_display]
+            
+            st.markdown("---")
+            # 日本語の曜日名を取得
+            weekday_names = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
+            weekday_name = weekday_names[date_obj.weekday()]
+            st.markdown(f"### {date_obj.strftime('%Y年%m月%d日')} ({weekday_name})")
+            
+            if users:
+                st.markdown(f"**利用者数: {len(users)}名**")
+                st.markdown("")
+                st.markdown("**利用者一覧:**")
+                for idx, user_name in enumerate(users, 1):
+                    st.markdown(f"{idx}. {user_name}")
+            else:
+                st.info("この日の利用者記録はありません。")
+    else:
+        st.info(f"{selected_year}年{selected_month}月には利用者記録がありません。")
+    
+    # 統計情報
+    st.markdown("---")
+    st.markdown('<div class="section-header">📊 統計情報</div>', unsafe_allow_html=True)
+    
+    # 選択した月の統計
+    month_recorded_dates = [d for d in recorded_dates]
+    if month_recorded_dates:
+        total_users_all_days = sum(len(users) for _, _, users in month_recorded_days)
+        avg_users_per_day = total_users_all_days / len(month_recorded_days) if month_recorded_days else 0
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("記録日数", f"{len(month_recorded_days)}日")
+        with col2:
+            st.metric("総利用者数", f"{total_users_all_days}名")
+        with col3:
+            st.metric("1日平均利用者数", f"{avg_users_per_day:.1f}名")
+
+
 def render_morning_meeting():
     """朝礼議事録画面の描画"""
     st.markdown('<div class="main-header">📝 朝礼議事録</div>', unsafe_allow_html=True)
@@ -2336,6 +2497,8 @@ def main():
         render_daily_report_form()
     elif st.session_state.current_page == "保存済み日報閲覧":
         render_saved_reports_viewer()
+    elif st.session_state.current_page == "利用者記録閲覧":
+        render_daily_users_calendar()
     elif st.session_state.current_page == "利用者マスタ管理":
         render_user_master()
     elif st.session_state.current_page == "朝礼議事録":
