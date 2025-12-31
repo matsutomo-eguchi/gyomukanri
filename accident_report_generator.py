@@ -176,8 +176,8 @@ class AccidentReportGenerator:
         center_x = x + width / 2
         center_y = y + height / 2
         
-        # 文字間隔を計算（letter-spacing: 0.3em）
-        char_spacing = font_size * 0.3
+        # 文字間隔を計算（letter-spacing: 5px、HTMLテンプレートに合わせる）
+        char_spacing = 5 * 0.264583 * mm  # 5pxをmmに変換
         
         # テキストの総高さを計算
         total_height = len(text) * (font_size + char_spacing) - char_spacing
@@ -246,11 +246,23 @@ class AccidentReportGenerator:
         # 現在のY位置を追跡
         current_y = start_y
         
-        # ===== ヘッダーテーブル =====
-        # テーブルデータ: [タイトル, 事業所名, 管理者]
-        header_table_data = [
+        # ===== ヘッダー部分 =====
+        # タイトル（左側）と事業所名・管理者（右側テーブル）を横並び
+        px_to_mm = 0.264583
+        
+        # タイトルを描画（左側、下揃え）
+        c.setFont(self.font_bold, 20)  # 20pt
+        title_text = "事故状況・対策報告書"
+        title_y = current_y - 10 * mm  # 下から10mm（少し上に上げる）
+        c.drawString(start_x + 6 * mm, title_y, title_text)
+        
+        # 右側のテーブル（事業所名と管理者）
+        right_table_width = 90 * mm  # 350px相当
+        right_table_x = start_x + content_width - right_table_width
+        
+        # 事業所名と管理者のテーブル
+        header_right_data = [
             [
-                Paragraph("事故状況・対策報告書", self.title_style),
                 Paragraph(
                     f'<para leading="13.86"><b>事業所名</b><br/>{data.get("facility_name", "")}</para>',
                     self.para_style
@@ -259,65 +271,63 @@ class AccidentReportGenerator:
             ]
         ]
         
-        # ヘッダーテーブルの列幅（35%, 40%, 25%）
-        # 管理者列を少し広げてはみ出しを防止
-        header_col_widths = [
-            content_width * 0.35,  # タイトル
-            content_width * 0.40,  # 事業所名
-            content_width * 0.25,  # 管理者（幅を広げてはみ出し防止）
+        header_right_col_widths = [
+            right_table_width * 0.70,  # 事業所名 70%
+            right_table_width * 0.30,  # 管理者 30%
         ]
         
-        # ヘッダーテーブルの高さ（HTMLでは60px、約15.9mm）
-        px_to_mm = 0.264583
-        header_table = Table(
-            header_table_data,
-            colWidths=header_col_widths,
-            rowHeights=[60 * px_to_mm * mm]  # 高さ60px
+        header_right_table = Table(
+            header_right_data,
+            colWidths=header_right_col_widths,
+            rowHeights=[50 * px_to_mm * mm]  # 50px高さ
         )
         
-        header_table_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm（HTMLでは2px）
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, 0), 'CENTER'),  # タイトル中央
-            ('ALIGN', (1, 0), (1, 0), 'LEFT'),    # 事業所名左
-            ('ALIGN', (2, 0), (2, 0), 'LEFT'),    # 管理者左
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 15),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
-            # 管理者列のパディングを調整（はみ出し防止）
-            ('LEFTPADDING', (2, 0), (2, 0), 3),
-            ('RIGHTPADDING', (2, 0), (2, 0), 3),
+        header_right_style = TableStyle([
+            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 内側は1px
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            # 外枠を太く（上と右）
+            ('LINEABOVE', (0, 0), (-1, 0), 2.0, colors.black),
+            ('LINEAFTER', (-1, 0), (-1, 0), 2.0, colors.black),
         ])
         
-        header_table.setStyle(header_table_style)
-        header_w, header_h = header_table.wrapOn(c, content_width, content_height)
-        header_table_y = current_y - header_h
-        header_table.drawOn(c, start_x, header_table_y)
+        header_right_table.setStyle(header_right_style)
+        header_right_w, header_right_h = header_right_table.wrapOn(c, right_table_width, content_height)
+        header_right_y = current_y - header_right_h
+        header_right_table.drawOn(c, right_table_x, header_right_y)
         
-        # 管理者セルに「管理者」と「㊞」を手動描画（左上と右下に配置）
-        # ReportLabの座標系は下から上なので、header_table_yは下端
-        manager_cell_x = start_x + header_col_widths[0] + header_col_widths[1] + 1.0  # 境界線分を考慮
-        manager_cell_y = header_table_y
-        manager_cell_width = header_col_widths[2] - 1.0 * 2  # 境界線分を引く
-        manager_cell_height = header_h - 1.0 * 2  # 境界線分を引く
+        # 管理者セルに「管理者」と「㊞」を手動描画
+        manager_cell_x = right_table_x + header_right_col_widths[0] + 1.0
+        manager_cell_y = header_right_y
+        manager_cell_width = header_right_col_widths[1] - 1.0 * 2
+        manager_cell_height = header_right_h - 1.0 * 2
         
-        # 左上に「管理者」を描画（ReportLabでは左上はY座標が大きい）
-        c.setFont(self.font_bold, 9.9)  # 0.9em = 9.9pt
-        manager_label_x = manager_cell_x + 3  # 左パディング
-        manager_label_y = header_table_y + manager_cell_height - 3  # 上パディング（セルの上端から3mm下）
+        # 左上に「管理者」を描画
+        c.setFont(self.font_bold, 9)  # 9pt
+        manager_label_x = manager_cell_x + 6
+        manager_label_y = header_right_y + manager_cell_height - 6
         c.drawString(manager_label_x, manager_label_y, "管理者")
         
-        # 右下に「㊞」を描画（ReportLabでは右下はY座標が小さい）
-        c.setFont(self.font_reg, 11)
+        # 右下に「㊞」を描画（フォントサイズを小さく）
+        c.setFont(self.font_reg, 12)  # 12pt（小さく調整）
         stamp_text = "㊞"
-        stamp_width = c.stringWidth(stamp_text, self.font_reg, 11)
-        stamp_x = manager_cell_x + manager_cell_width - stamp_width - 3  # 右パディング
-        stamp_y = manager_cell_y + 3  # 下パディング（セルの下端から3mm上）
+        stamp_width = c.stringWidth(stamp_text, self.font_reg, 12)
+        stamp_x = manager_cell_x + manager_cell_width - stamp_width - 5
+        stamp_y = manager_cell_y + 5
         c.drawString(stamp_x, stamp_y, stamp_text)
         
-        # HTMLではmargin-bottom: 20px（約5.3mm）
-        current_y -= header_h + 5.3 * mm
+        # タイトル下の太い線（2px）を描画
+        line_y = current_y - header_right_h - 2 * mm
+        c.setLineWidth(2.0)
+        c.line(start_x, line_y, start_x + content_width, line_y)
+        
+        # マージンを調整（A4に収まるように）
+        current_y = line_y - 1 * mm
         
         # ===== 情報テーブル（第1行） =====
         # 報告内容、報告者氏名、記録日
@@ -363,9 +373,9 @@ class AccidentReportGenerator:
         ]
         
         info_row1_col_widths = [
-            content_width * 0.35,  # 報告内容
-            content_width * 0.35,  # 報告者氏名
-            content_width * 0.30,  # 記録日
+            content_width * 0.35,  # 報告内容 35%
+            content_width * 0.30,  # 報告者氏名 30%
+            content_width * 0.35,  # 記録日 35%
         ]
         
         info_row1_table = Table(
@@ -375,21 +385,24 @@ class AccidentReportGenerator:
         )
         
         info_row1_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm
+            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 内側は1px
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('ALIGN', (0, 0), (1, 0), 'LEFT'),  # 報告内容、報告者氏名は左
             ('ALIGN', (2, 0), (2, 0), 'RIGHT'),  # 記録日は右
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            # 外枠を太く（左と右）
+            ('LINEBEFORE', (0, 0), (0, 0), 2.0, colors.black),
+            ('LINEAFTER', (-1, 0), (-1, 0), 2.0, colors.black),
         ])
         
         info_row1_table.setStyle(info_row1_style)
         info_row1_w, info_row1_h = info_row1_table.wrapOn(c, content_width, content_height)
         info_row1_table.drawOn(c, start_x, current_y - info_row1_h)
-        # HTMLではmargin-bottom: 20px（約5.3mm）
-        current_y -= info_row1_h + 5.3 * mm
+        # マージンを調整（A4に収まるように）
+        current_y -= info_row1_h + 2 * mm
         
         # ===== 情報テーブル（第2行） =====
         # 事故発生日時、発生場所、対象者
@@ -429,23 +442,27 @@ class AccidentReportGenerator:
         )
         
         info_row2_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm
+            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 内側は1px
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            # 外枠を太く（左、右、下）
+            ('LINEBEFORE', (0, 0), (0, 0), 2.0, colors.black),
+            ('LINEAFTER', (-1, 0), (-1, 0), 2.0, colors.black),
+            ('LINEBELOW', (0, 0), (-1, 0), 2.0, colors.black),
         ])
         
         info_row2_table.setStyle(info_row2_style)
         info_row2_w, info_row2_h = info_row2_table.wrapOn(c, content_width, content_height)
         info_row2_table.drawOn(c, start_x, current_y - info_row2_h)
-        # HTMLではmargin-bottom: 20px（約5.3mm）
-        current_y -= info_row2_h + 5.3 * mm
+        # マージンを調整（A4に収まるように）
+        current_y -= info_row2_h + 2 * mm
         
         # ===== 本文テーブル =====
-        # 縦書きカテゴリと横書き内容
+        # 横書きカテゴリと横書き内容
         # situationとprocessを統合
         situation_text = data.get("situation", "")
         process_text = data.get("process", "")
@@ -482,23 +499,24 @@ class AccidentReportGenerator:
         ]
         
         # 本文テーブルの列幅（ラベルカラム: 適切な幅、内容カラム: 残り）
-        # 横書きラベルの幅を確保（文字数に応じて調整、はみ出し防止）
-        # 最長のラベル「事故発生状況と経過」が9文字なので、適切な幅を設定
-        label_col_width = 30 * mm  # 横書きラベル用の幅（はみ出し防止）
+        # A4に収まるように調整
+        label_col_width = 35 * mm  # 横書きラベル用の幅
         body_col_widths = [
             label_col_width,  # 横書きカテゴリ
-            content_width - label_col_width - 1.0 * 2,  # 内容（境界線分を引く、2px = 約1.0mm）
+            content_width - label_col_width - 1.0 * 2,  # 内容（境界線分を引く）
         ]
         
-        # 行の高さ（HTMLのheightに合わせる、1px ≈ 0.264583mm）
-        # HTMLではテキストエリアの高さが指定されているが、セル全体の高さはパディングを含む
-        # padding: 15px 5px なので、上下パディング30px（約7.9mm）を考慮
-        px_to_mm = 0.264583
+        # 行の高さをA4に収まるように調整（HTMLの比率を維持しつつ縮小）
+        # 利用可能な高さを計算: A4高さ297mm - マージン30mm - ヘッダー約30mm - 情報テーブル約40mm - フッター約50mm = 約147mm
+        # HTMLの比率: 250:150:150:100 = 5:3:3:2
+        # 合計13単位で約120mmに調整
+        available_height = 120 * mm
+        unit_height = available_height / 13
         body_row_heights = [
-            (180 + 30) * px_to_mm * mm,  # 180px + パディング30px
-            (120 + 30) * px_to_mm * mm,  # 120px + パディング30px
-            (120 + 30) * px_to_mm * mm,  # 120px + パディング30px
-            (80 + 30) * px_to_mm * mm,   # 80px + パディング30px
+            unit_height * 5,  # 事故発生状況と経過
+            unit_height * 3,  # 事故原因
+            unit_height * 3,  # 対策
+            unit_height * 2,  # その他
         ]
         
         body_table = Table(
@@ -508,52 +526,57 @@ class AccidentReportGenerator:
         )
         
         body_table_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm
+            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 内側は1px
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # ラベルカラム中央
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),    # 内容左
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 15),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
-            ('LEFTPADDING', (1, 0), (1, -1), 5),
-            ('RIGHTPADDING', (1, 0), (1, -1), 5),
-            ('TOPPADDING', (1, 0), (1, -1), 5),
-            ('BOTTOMPADDING', (1, 0), (1, -1), 5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (1, 0), (1, -1), 6),
+            ('RIGHTPADDING', (1, 0), (1, -1), 6),
+            ('TOPPADDING', (1, 0), (1, -1), 6),
+            ('BOTTOMPADDING', (1, 0), (1, -1), 6),
+            # 外枠を太く（左、右、下）
+            ('LINEBEFORE', (0, 0), (0, -1), 2.0, colors.black),
+            ('LINEAFTER', (-1, 0), (-1, -1), 2.0, colors.black),
+            ('LINEBELOW', (0, -1), (-1, -1), 2.0, colors.black),
         ])
         
         body_table.setStyle(body_table_style)
         body_w, body_h = body_table.wrapOn(c, content_width, content_height)
         body_table.drawOn(c, start_x, current_y - body_h)
-        # HTMLではmargin-bottom: 20px（約5.3mm）
-        current_y -= body_h + 5.3 * mm
+        current_y -= body_h + 3 * mm
         
         # ===== フッター =====
-        # 説明文と確認文
-        footer_y = current_y - 10 * mm
+        # 説明文と確認文（A4に収まるようにマージンを調整）
+        footer_y = current_y - 8 * mm
         
-        # 説明文
-        c.setFont(self.font_reg, 9.9)  # 0.9em = 9.9pt
+        # 説明文（10pt）
+        c.setFont(self.font_reg, 10)
         c.drawString(start_x, footer_y, "（説明が必要な場合に署名・捺印を頂きます）")
+        
+        footer_y -= 8 * mm
+        
+        # 確認文（14pt、左マージン20px = 約5.3mm）
+        c.setFont(self.font_reg, 14)
+        c.drawString(start_x + 5.3 * mm, footer_y, "上記について、説明を受けました。")
         
         footer_y -= 15 * mm
         
-        # 確認文（1.2em = 13.2pt、左マージン20px = 約5.3mm）
-        c.setFont(self.font_reg, 13.2)  # 1.2em
-        c.drawString(start_x + 5.3 * mm, footer_y, "上記について、説明を受けました。")
-        
-        footer_y -= 20 * mm
-        
-        # 日付欄（中央揃え）
+        # 署名欄（HTMLでは右寄せ、margin-right: 20px）
+        sign_area_y = footer_y
         c.setFont(self.font_reg, 11)
-        date_y = footer_y
+        right_margin = 5.3 * mm
+        sign_area_right = start_x + content_width - right_margin
         
-        # 日付を中央揃えで描画（年、月、日を分けて表示）
+        # 日付欄（右寄せ）
         date_year_text = f"{record_date_year}"
         date_month_text = f"{record_date_month}"
         date_day_text = f"{record_date_day}"
         
-        # 各要素の幅を計算
+        # 日付の各要素の幅を計算
         year_width = c.stringWidth(date_year_text, self.font_reg, 11)
         month_width = c.stringWidth(date_month_text, self.font_reg, 11)
         day_width = c.stringWidth(date_day_text, self.font_reg, 11)
@@ -565,45 +588,43 @@ class AccidentReportGenerator:
         # 全体の幅を計算
         total_date_width = year_width + space_width + nen_width + space_width + month_width + space_width + gatsu_width + space_width + day_width + space_width + nichi_width
         
-        # 中央揃えで描画
-        date_start_x = start_x + (content_width - total_date_width) / 2
-        
+        # 右寄せで描画
+        date_start_x = sign_area_right - total_date_width
         x_pos = date_start_x
-        c.drawString(x_pos, date_y, date_year_text)
+        c.drawString(x_pos, sign_area_y, date_year_text)
         x_pos += year_width + space_width
-        c.drawString(x_pos, date_y, "年")
+        c.drawString(x_pos, sign_area_y, "年")
         x_pos += nen_width + space_width
-        c.drawString(x_pos, date_y, date_month_text)
+        c.drawString(x_pos, sign_area_y, date_month_text)
         x_pos += month_width + space_width
-        c.drawString(x_pos, date_y, "月")
+        c.drawString(x_pos, sign_area_y, "月")
         x_pos += gatsu_width + space_width
-        c.drawString(x_pos, date_y, date_day_text)
+        c.drawString(x_pos, sign_area_y, date_day_text)
         x_pos += day_width + space_width
-        c.drawString(x_pos, date_y, "日")
+        c.drawString(x_pos, sign_area_y, "日")
         
-        # 改行後の氏名欄（右寄せ）
-        sign_area_y = date_y - 20 * mm  # line-height: 2.5相当
-        
-        # 署名欄（HTMLでは右寄せ、margin-right: 20px）
-        right_margin = 5.3 * mm
-        sign_area_right = start_x + content_width - right_margin
+        # 改行後の氏名欄（右寄せ、line-height: 2.5相当）
+        sign_area_y -= 20 * mm
         
         # 氏名ラベル
         name_label = "氏名"
         name_label_width = c.stringWidth(name_label, self.font_reg, 11)
-        name_label_x = sign_area_right - 66 * mm - 1.3 * mm - name_label_width - 5 * mm  # 下線幅 + 印鑑マージン + ラベル幅 + マージン
+        # 下線幅200px = 約53mm、印鑑マーク幅、マージンを考慮
+        underline_width = 53 * mm
+        stamp_width = c.stringWidth("印", self.font_reg, 11)
+        total_name_width = name_label_width + 10 * mm + underline_width + 5 * mm + stamp_width
+        
+        name_label_x = sign_area_right - total_name_width
         c.drawString(name_label_x, sign_area_y, name_label)
         
-        # 氏名の下線（250px = 約66mm）
-        underline_x = name_label_x + name_label_width + 5 * mm  # ラベルの後
-        underline_width = 66 * mm
+        # 氏名の下線（200px = 約53mm）
+        underline_x = name_label_x + name_label_width + 10 * mm
         c.setLineWidth(0.5)
         c.line(underline_x, sign_area_y - 2, underline_x + underline_width, sign_area_y - 2)
         
-        # 印鑑マーク（下線の右側、margin-left: 5px = 約1.3mm）
-        stamp_x = underline_x + underline_width + 1.3 * mm
-        c.setFont(self.font_reg, 11)
-        c.drawString(stamp_x, sign_area_y, "㊞")
+        # 印鑑マーク「印」（下線の右側、margin-left: 5px = 約1.3mm）
+        stamp_x = underline_x + underline_width + 5 * mm
+        c.drawString(stamp_x, sign_area_y, "印")
         
         # 保存
         c.save()
