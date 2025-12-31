@@ -1122,46 +1122,107 @@ def render_daily_report_form():
             # 基本情報セクション
             st.markdown("##### 📍 基本情報")
             
-            # 第1行: 発生場所と対象者
-            col1, col2 = st.columns(2)
-            with col1:
-                incident_location = st.text_input(
-                    "発生場所 *",
-                    key="incident_location",
-                    placeholder="例: プレイルーム、送迎車内",
-                    value=st.session_state.get("incident_location", ""),
-                    help="事故が発生した場所を入力してください"
-                )
+            # 記入者名
+            default_reporter = st.session_state.get("staff_name", "")
+            incident_reporter = st.text_input(
+                "記入者名 *",
+                key="incident_reporter",
+                placeholder="記入者名を入力してください",
+                value=st.session_state.get("incident_reporter", default_reporter),
+                help="事故報告書の記入者名を入力してください"
+            )
             
-            with col2:
-                incident_subject = st.multiselect(
-                    "対象者 *（複数選択可）",
-                    options=st.session_state.data_manager.get_active_users(),
-                    key="incident_subject",
-                    default=st.session_state.get("incident_subject", []),
-                    help="対象となる児童を複数選択できます。PDF出力時は「、」で区切られます。"
+            # 発生日時
+            st.markdown("**発生日時 ***")
+            col_date1, col_date2, col_date3, col_date4 = st.columns(4)
+            with col_date1:
+                # 現在の日付を取得してデフォルト値に設定
+                now = datetime.now()
+                incident_year = st.number_input(
+                    "年",
+                    min_value=2019,
+                    max_value=2100,
+                    value=st.session_state.get("incident_year", now.year),
+                    key="incident_year",
+                    help="発生日の年（西暦）"
                 )
+            with col_date2:
+                incident_month = st.number_input(
+                    "月",
+                    min_value=1,
+                    max_value=12,
+                    value=st.session_state.get("incident_month", now.month),
+                    key="incident_month",
+                    help="発生日の月"
+                )
+            with col_date3:
+                incident_day = st.number_input(
+                    "日",
+                    min_value=1,
+                    max_value=31,
+                    value=st.session_state.get("incident_day", now.day),
+                    key="incident_day",
+                    help="発生日の日"
+                )
+            with col_date4:
+                # 曜日を自動計算して表示
+                try:
+                    date_obj = datetime(incident_year, incident_month, incident_day)
+                    weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
+                    weekday_name = weekday_map[date_obj.weekday()]
+                    st.markdown(f"<br><strong>（{weekday_name}曜日）</strong>", unsafe_allow_html=True)
+                except ValueError:
+                    st.markdown("<br><strong>（-）</strong>", unsafe_allow_html=True)
             
-            # 第2行: 発生時刻
-            col_time1, col_time2 = st.columns(2)
+            # 発生時刻
+            col_time1, col_time2, col_time3 = st.columns(3)
             with col_time1:
-                incident_time_hour = st.number_input(
-                    "発生時刻（時） *",
-                    min_value=0,
-                    max_value=23,
-                    value=st.session_state.get("incident_time_hour", datetime.now().hour),
-                    key="incident_time_hour",
-                    help="事故が発生した時刻（時）を入力してください"
+                incident_am_pm = st.selectbox(
+                    "午前/午後",
+                    options=["午前", "午後"],
+                    index=st.session_state.get("incident_am_pm", 1 if now.hour >= 12 else 0),
+                    key="incident_am_pm",
+                    help="発生時刻の午前/午後"
                 )
             with col_time2:
+                hour_max = 12 if incident_am_pm == "午後" else 11
+                hour_min = 1 if incident_am_pm == "午後" else 0
+                current_hour = now.hour % 12 if now.hour % 12 != 0 else 12
+                incident_time_hour = st.number_input(
+                    "時",
+                    min_value=hour_min,
+                    max_value=hour_max,
+                    value=st.session_state.get("incident_time_hour", current_hour),
+                    key="incident_time_hour",
+                    help="発生時刻（時）"
+                )
+            with col_time3:
                 incident_time_min = st.number_input(
-                    "発生時刻（分） *",
+                    "分",
                     min_value=0,
                     max_value=59,
-                    value=st.session_state.get("incident_time_min", datetime.now().minute),
+                    value=st.session_state.get("incident_time_min", now.minute),
                     key="incident_time_min",
-                    help="事故が発生した時刻（分）を入力してください"
+                    help="発生時刻（分）"
                 )
+            
+            # 発生場所
+            incident_location = st.text_input(
+                "発生場所 *",
+                key="incident_location",
+                placeholder="例: プレイルーム、送迎車内",
+                value=st.session_state.get("incident_location", ""),
+                help="事故が発生した場所を入力してください"
+            )
+            
+            # 対象者（事故報告書特有の項目）
+            incident_subject = st.multiselect(
+                "対象者 *（複数選択可）",
+                options=st.session_state.data_manager.get_active_users(),
+                key="incident_subject",
+                default=st.session_state.get("incident_subject", []),
+                help="対象となる児童を複数選択できます。PDF出力時は「、」で区切られます。"
+            )
             
             st.markdown("---")
             
@@ -1718,10 +1779,30 @@ def render_daily_report_form():
             
             if form_incident_toggle and form_report_type == "事故報告書（PDF）":
                 # セッション状態から値を取得（フォーム外で入力した値を使用）
+                incident_reporter = st.session_state.get("incident_reporter", "")
                 incident_location = st.session_state.get("incident_location", "")
                 incident_subject = st.session_state.get("incident_subject", [])
-                incident_time_hour = st.session_state.get("incident_time_hour", datetime.now().hour)
-                incident_time_min = st.session_state.get("incident_time_min", datetime.now().minute)
+                
+                # 発生日時の取得
+                now = datetime.now()
+                incident_year = st.session_state.get("incident_year", now.year)
+                incident_month = st.session_state.get("incident_month", now.month)
+                incident_day = st.session_state.get("incident_day", now.day)
+                incident_am_pm = st.session_state.get("incident_am_pm", "午前")
+                incident_time_hour_input = st.session_state.get("incident_time_hour", now.hour % 12 if now.hour % 12 != 0 else 12)
+                incident_time_min = st.session_state.get("incident_time_min", now.minute)
+                
+                # 午前/午後の処理（24時間形式に変換）
+                if incident_am_pm == "午後":
+                    if incident_time_hour_input < 12:
+                        incident_time_hour = incident_time_hour_input + 12
+                    else:
+                        incident_time_hour = incident_time_hour_input
+                else:  # 午前
+                    if incident_time_hour_input == 12:
+                        incident_time_hour = 0
+                    else:
+                        incident_time_hour = incident_time_hour_input
                 
                 # デバッグ情報（開発時のみ）
                 if st.session_state.get("debug_mode", False):
@@ -1787,6 +1868,11 @@ def render_daily_report_form():
                 errors = []
                 error_details = []
                 
+                # 基本情報のバリデーション
+                if not incident_reporter:
+                    errors.append("❌ **記入者名**を入力してください")
+                    error_details.append("→ フォーム外の「📋 事故報告詳細」セクションの「📍 基本情報」で「記入者名 *」に入力してください")
+                
                 if not incident_location:
                     errors.append("❌ **発生場所**を入力してください")
                     error_details.append("→ フォーム外の「📋 事故報告詳細」セクションの「📍 基本情報」で「発生場所 *」に入力してください")
@@ -1820,9 +1906,19 @@ def render_daily_report_form():
                     st.info("💡 **ヒント:** フォーム外の「📋 事故報告詳細」セクションで基本情報（発生場所、対象者、原因チェックリスト、分類）を入力し、フォーム内で詳細情報を入力してください。")
                 else:
                     try:
-                        # 日付情報の準備
-                        work_date = st.session_state.work_date
-                        date_info = AccidentReportGenerator.format_date_for_report(work_date)
+                        # 日付情報の準備（新しく追加した基本情報から取得）
+                        try:
+                            incident_date = datetime(incident_year, incident_month, incident_day)
+                            date_info = AccidentReportGenerator.format_date_for_report(incident_date.date())
+                        except ValueError:
+                            # 無効な日付の場合は現在の日付を使用
+                            work_date = st.session_state.work_date
+                            date_info = AccidentReportGenerator.format_date_for_report(work_date)
+                            incident_date = datetime.combine(work_date, time(incident_time_hour, incident_time_min))
+                        
+                        # 曜日を計算
+                        weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
+                        weekday_name = weekday_map[incident_date.weekday()]
                         
                         # セッション状態から事業者名と報告内容を取得
                         facility_name = st.session_state.get("facility_name", "放課後等デイサービス")
@@ -1845,14 +1941,17 @@ def render_daily_report_form():
                         else:
                             subject_name_str = str(incident_subject) if incident_subject else ""
                         
+                        # 記入者名を取得（デフォルトはスタッフ名）
+                        reporter_name = incident_reporter if incident_reporter else st.session_state.get("staff_name", "")
+                        
                         # PDF生成用のデータを準備
                         pdf_data = {
                             "facility_name": facility_name,
                             "report_content": report_content,
-                            "date_year": date_info["date_year"],
-                            "date_month": date_info["date_month"],
-                            "date_day": date_info["date_day"],
-                            "date_weekday": date_info["date_weekday"],
+                            "date_year": str(incident_year),
+                            "date_month": str(incident_month),
+                            "date_day": str(incident_day),
+                            "date_weekday": weekday_name,
                             "time_hour": str(incident_time_hour).zfill(2),
                             "time_min": str(incident_time_min).zfill(2),
                             "location": incident_location,
@@ -1862,11 +1961,11 @@ def render_daily_report_form():
                             "cause": incident_cause,
                             "countermeasure": incident_countermeasure,
                             "others": incident_others,
-                            "reporter_name": st.session_state.staff_name,
-                            "record_date": work_date.strftime("%Y年%m月%d日"),
-                            "record_date_year": date_info.get("record_date_year", date_info["date_year"]),
-                            "record_date_month": date_info.get("record_date_month", date_info["date_month"]),
-                            "record_date_day": date_info.get("record_date_day", date_info["date_day"])
+                            "reporter_name": reporter_name,
+                            "record_date": incident_date.strftime("%Y年%m月%d日"),
+                            "record_date_year": str(incident_year),
+                            "record_date_month": str(incident_month),
+                            "record_date_day": str(incident_day)
                         }
                         
                         # ファイル名にタイトルを使用（タイトルから「の件」を除いて使用）
@@ -1878,7 +1977,7 @@ def render_daily_report_form():
                             "type": "accident",
                             "pdf_data": pdf_data,
                             "title": accident_title,
-                            "file_name": f"事故報告書_{work_date.strftime('%Y%m%d')}_{safe_title}.pdf"
+                            "file_name": f"事故報告書_{incident_date.strftime('%Y%m%d')}_{safe_title}.pdf"
                         }
                         st.success("✅ PDF報告書を生成しました！")
                             
