@@ -1788,6 +1788,22 @@ def render_daily_users_calendar():
                 st.markdown("**利用者一覧:**")
                 for idx, user_name in enumerate(users, 1):
                     st.markdown(f"{idx}. {user_name}")
+                
+                # 削除ボタン
+                st.markdown("---")
+                st.markdown("**⚠️ 記録の削除**")
+                delete_confirm = st.checkbox(
+                    f"{date_obj.strftime('%Y年%m月%d日')}の利用者記録を削除する",
+                    key=f"delete_confirm_{date_str}",
+                    help="この日の利用者記録を削除する場合はチェックを入れてください"
+                )
+                if delete_confirm:
+                    if st.button("🗑️ 削除を実行", use_container_width=True, type="secondary", key=f"delete_{date_str}"):
+                        if dm.delete_daily_users(date_str):
+                            st.success(f"✅ {date_obj.strftime('%Y年%m月%d日')}の利用者記録を削除しました")
+                            st.rerun()
+                        else:
+                            st.error("削除に失敗しました")
             else:
                 st.info("この日の利用者記録はありません。")
     else:
