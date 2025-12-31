@@ -119,6 +119,7 @@ class AccidentReportGenerator:
             alignment=TA_LEFT,
             spaceBefore=0,
             spaceAfter=0,
+            wordWrap='CJK',  # 日本語の自動折り返しを有効化
         )
         
         # タイトル用スタイル
@@ -129,6 +130,7 @@ class AccidentReportGenerator:
             fontSize=16.5,  # 1.5em = 11pt * 1.5
             leading=23.1,
             alignment=TA_CENTER,
+            wordWrap='CJK',  # 日本語の自動折り返しを有効化
         )
         
         # ラベル用スタイル（0.9em = 9.9pt）
@@ -139,6 +141,7 @@ class AccidentReportGenerator:
             fontSize=9.9,
             leading=13.86,
             alignment=TA_LEFT,
+            wordWrap='CJK',  # 日本語の自動折り返しを有効化
         )
         
         # 本文テーブルのラベル用スタイル（横書き、太字、中央揃え）
@@ -151,6 +154,7 @@ class AccidentReportGenerator:
             alignment=TA_CENTER,
             spaceBefore=0,
             spaceAfter=0,
+            wordWrap='CJK',  # 日本語の自動折り返しを有効化（はみ出し防止）
         )
     
     def draw_vertical_text(self, canvas_obj, text, x, y, width, height, font_name, font_size):
@@ -426,38 +430,39 @@ class AccidentReportGenerator:
         else:
             situation_full = situation_text
         
-        body_table_data = [
-            [
-                "",  # 縦書きテキストは後で描画
-                Paragraph(situation_full, self.para_style)
-            ],
-            [
-                "",
-                Paragraph(data.get("cause", ""), self.para_style)
-            ],
-            [
-                "",
-                Paragraph(data.get("countermeasure", ""), self.para_style)
-            ],
-            [
-                "",
-                Paragraph(data.get("others", ""), self.para_style)
-            ]
-        ]
-        
-        # 縦書きカテゴリのテキスト
-        vertical_labels = [
+        # 横書きカテゴリのテキスト
+        horizontal_labels = [
             "事故発生状況と経過",
             "事故原因",
             "対　策",
             "その他"
         ]
         
-        # 本文テーブルの列幅（HTMLでは左列が50px、約13.2mm）
-        # 50px = 50 * 0.264583mm ≈ 13.2mm
-        label_col_width = 13.2 * mm  # HTMLの50pxに合わせる
+        body_table_data = [
+            [
+                Paragraph(horizontal_labels[0], self.body_label_style),
+                Paragraph(situation_full, self.para_style)
+            ],
+            [
+                Paragraph(horizontal_labels[1], self.body_label_style),
+                Paragraph(data.get("cause", ""), self.para_style)
+            ],
+            [
+                Paragraph(horizontal_labels[2], self.body_label_style),
+                Paragraph(data.get("countermeasure", ""), self.para_style)
+            ],
+            [
+                Paragraph(horizontal_labels[3], self.body_label_style),
+                Paragraph(data.get("others", ""), self.para_style)
+            ]
+        ]
+        
+        # 本文テーブルの列幅（ラベルカラム: 適切な幅、内容カラム: 残り）
+        # 横書きラベルの幅を確保（文字数に応じて調整、はみ出し防止）
+        # 最長のラベル「事故発生状況と経過」が9文字なので、適切な幅を設定
+        label_col_width = 30 * mm  # 横書きラベル用の幅（はみ出し防止）
         body_col_widths = [
-            label_col_width,  # 縦書きカテゴリ
+            label_col_width,  # 横書きカテゴリ
             content_width - label_col_width - 1.0 * 2,  # 内容（境界線分を引く、2px = 約1.0mm）
         ]
         
@@ -481,7 +486,7 @@ class AccidentReportGenerator:
         body_table_style = TableStyle([
             ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # 縦書きカラム中央
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # ラベルカラム中央
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),    # 内容左
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
             ('RIGHTPADDING', (0, 0), (-1, -1), 5),
@@ -495,42 +500,7 @@ class AccidentReportGenerator:
         
         body_table.setStyle(body_table_style)
         body_w, body_h = body_table.wrapOn(c, content_width, content_height)
-        body_table_y = current_y - body_h
-        body_table.drawOn(c, start_x, body_table_y)
-        
-        # 縦書きテキストを描画
-        # テーブルの各セルの位置を計算（ReportLabのテーブル描画後の座標）
-        # ReportLabのテーブルは下から上に描画されるため、Y座標は下から上に累積
-        table_x = start_x
-        table_y = body_table_y
-        
-        # 各行のY位置を計算（下から上へ）
-        # 最初の行（最下段）から開始
-        cumulative_height = 0
-        for i in range(len(vertical_labels)):
-            # 下から数えてi行目のセルのY位置
-            cell_x = table_x
-            # 下から上に累積高さを計算（境界線の太さも考慮）
-            cell_y = table_y + cumulative_height
-            cell_width = body_col_widths[0]
-            cell_height = body_row_heights[i]
-            
-            # 縦書きテキストを描画（セルの中央に配置）
-            # HTMLではletter-spacing: 0.3emなので、文字間隔を調整
-            self.draw_vertical_text(
-                c,
-                vertical_labels[i],
-                cell_x,
-                cell_y,
-                cell_width,
-                cell_height,
-                self.font_bold,
-                11
-            )
-            
-            # 次の行のために累積高さを更新（境界線の太さ1.0mmも考慮）
-            cumulative_height += body_row_heights[i] + 1.0
-        
+        body_table.drawOn(c, start_x, current_y - body_h)
         # HTMLではmargin-bottom: 20px（約5.3mm）
         current_y -= body_h + 5.3 * mm
         
