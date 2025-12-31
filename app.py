@@ -19,11 +19,19 @@ from hiyari_hatto_generator import HiyariHattoGenerator
 
 # ページ設定
 st.set_page_config(
-    page_title="業務管理フォーム",
+    page_title="放課後等デイサービス 業務管理フォーム",
     page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# HTMLタイトルと言語属性を設定
+st.markdown("""
+<script>
+document.title = "放課後等デイサービス 業務管理フォーム";
+document.documentElement.lang = "ja";
+</script>
+""", unsafe_allow_html=True)
 
 # カスタムCSS
 st.markdown("""
@@ -2157,6 +2165,13 @@ def render_morning_meeting():
                         "共有事項": shared_items if shared_items else "",
                         "その他メモ": notes if notes else ""
                     }
+                    
+                    # タイトルが生成されていない場合は、議題・内容からタイトルを生成
+                    if "タイトル" not in meeting_data or not meeting_data.get("タイトル"):
+                        if agenda and agenda.strip():
+                            title_success, title = st.session_state.ai_helper.generate_title_from_text(agenda)
+                            if title_success:
+                                meeting_data["タイトル"] = title
                     
                     if st.session_state.data_manager.save_morning_meeting(meeting_data):
                         st.success("✅ 朝礼議事録を保存しました！")

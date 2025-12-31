@@ -325,18 +325,134 @@ class AIHelper:
                 if key not in meeting_data:
                     meeting_data[key] = ""
             
+            # 議題・内容から短いタイトルを生成
+            if "議題・内容" in meeting_data and meeting_data["議題・内容"]:
+                title_success, title = self.generate_title_from_text(meeting_data["議題・内容"])
+                if title_success:
+                    meeting_data["タイトル"] = title
+            
             return True, meeting_data
             
         except json.JSONDecodeError as e:
             # JSONパースエラーの場合、テキストをそのまま議題・内容として使用
-            return True, {
+            meeting_data = {
                 "議題・内容": text[:1000] if len(text) > 1000 else text,
                 "決定事項": "",
                 "共有事項": "",
                 "その他メモ": ""
             }
+            # 議題・内容から短いタイトルを生成
+            if meeting_data["議題・内容"]:
+                title_success, title = self.generate_title_from_text(meeting_data["議題・内容"])
+                if title_success:
+                    meeting_data["タイトル"] = title
+            return True, meeting_data
         except Exception as e:
             return False, f"議事録生成エラー: {str(e)}"
+    
+    def generate_title_from_text(self, text: str) -> tuple:
+        """
+        テキストから短いタイトルを生成（「○○の件」形式）
+        
+        Args:
+            text: 元となるテキスト（議題・内容など）
+            
+        Returns:
+            (成功フラグ, 生成されたタイトル)
+        """
+        if not self.is_available():
+            # APIキーがない場合は、テキストから簡易的にタイトルを生成
+            if not text or not text.strip():
+                return False, ""
+            
+            # テキストの最初の30文字程度を取得し、「の件」を追加
+            title = text.strip()[:30]
+            # 句読点や改行で区切る
+            for delimiter in ['。', '、', '\n', '.', ',']:
+                if delimiter in title:
+                    title = title.split(delimiter)[0]
+            
+            # 30文字を超える場合は「の件」を追加、そうでない場合はそのまま
+            if len(text.strip()) > 30:
+                title = title + "の件"
+            else:
+                title = text.strip() + "の件"
+            
+            return True, title
+        
+        if not text or not text.strip():
+            return False, ""
+        
+        prompt = f"""以下の議題・内容から、短いタイトルを生成してください。
+タイトルは「○○の件」という形式で、20文字以内にまとめてください。
+
+議題・内容:
+{text}
+
+タイトルのみを返してください（「の件」という形式で）。"""
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "あなたはタイトル生成の専門家です。簡潔で分かりやすいタイトルを作成します。"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.3,
+                "max_tokens": 50
+            }
+            
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                title = result["choices"][0]["message"]["content"].strip()
+                # 20字以内に制限
+                if len(title) > 20:
+                    title = title[:20]
+                # 「の件」が含まれていない場合は追加
+                if "の件" not in title:
+                    title = title + "の件"
+                return True, title
+            else:
+                # APIエラーの場合は簡易的にタイトルを生成
+                title = text.strip()[:20]
+                for delimiter in ['。', '、', '\n', '.', ',']:
+                    if delimiter in title:
+                        title = title.split(delimiter)[0]
+                if len(text.strip()) > 20:
+                    title = title + "の件"
+                else:
+                    title = text.strip() + "の件"
+                return True, title
+                
+        except Exception as e:
+            # エラーの場合は簡易的にタイトルを生成
+            title = text.strip()[:20]
+            for delimiter in ['。', '、', '\n', '.', ',']:
+                if delimiter in title:
+                    title = title.split(delimiter)[0]
+            if len(text.strip()) > 20:
+                title = title + "の件"
+            else:
+                title = text.strip() + "の件"
+            return True, title
     
     def improve_text(self, text: str) -> tuple:
         """
