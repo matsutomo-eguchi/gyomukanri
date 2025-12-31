@@ -255,10 +255,7 @@ class AccidentReportGenerator:
                     f'<para leading="13.86"><b>事業所名</b><br/>{data.get("facility_name", "")}</para>',
                     self.para_style
                 ),
-                Paragraph(
-                    '<para leading="13.86"><b>管理者</b><br/>㊞</para>',
-                    self.para_style
-                )
+                ""  # 管理者セルは後で手動描画
             ]
         ]
         
@@ -295,7 +292,30 @@ class AccidentReportGenerator:
         
         header_table.setStyle(header_table_style)
         header_w, header_h = header_table.wrapOn(c, content_width, content_height)
-        header_table.drawOn(c, start_x, current_y - header_h)
+        header_table_y = current_y - header_h
+        header_table.drawOn(c, start_x, header_table_y)
+        
+        # 管理者セルに「管理者」と「㊞」を手動描画（左上と右下に配置）
+        # ReportLabの座標系は下から上なので、header_table_yは下端
+        manager_cell_x = start_x + header_col_widths[0] + header_col_widths[1] + 1.0  # 境界線分を考慮
+        manager_cell_y = header_table_y
+        manager_cell_width = header_col_widths[2] - 1.0 * 2  # 境界線分を引く
+        manager_cell_height = header_h - 1.0 * 2  # 境界線分を引く
+        
+        # 左上に「管理者」を描画（ReportLabでは左上はY座標が大きい）
+        c.setFont(self.font_bold, 9.9)  # 0.9em = 9.9pt
+        manager_label_x = manager_cell_x + 3  # 左パディング
+        manager_label_y = header_table_y + manager_cell_height - 3  # 上パディング（セルの上端から3mm下）
+        c.drawString(manager_label_x, manager_label_y, "管理者")
+        
+        # 右下に「㊞」を描画（ReportLabでは右下はY座標が小さい）
+        c.setFont(self.font_reg, 11)
+        stamp_text = "㊞"
+        stamp_width = c.stringWidth(stamp_text, self.font_reg, 11)
+        stamp_x = manager_cell_x + manager_cell_width - stamp_width - 3  # 右パディング
+        stamp_y = manager_cell_y + 3  # 下パディング（セルの下端から3mm上）
+        c.drawString(stamp_x, stamp_y, stamp_text)
+        
         # HTMLではmargin-bottom: 20px（約5.3mm）
         current_y -= header_h + 5.3 * mm
         
@@ -524,43 +544,65 @@ class AccidentReportGenerator:
         
         footer_y -= 20 * mm
         
-        # 署名欄（HTMLでは右寄せ、margin-right: 20px）
-        sign_area_y = footer_y
+        # 日付欄（中央揃え）
         c.setFont(self.font_reg, 11)
+        date_y = footer_y
         
-        # HTMLの構造: 日付、改行、氏名 + 下線 + 印鑑マーク（すべて右寄せ）
-        # 右マージン20px = 約5.3mm、はみ出し防止のため少し余裕を持たせる
-        right_margin = 5.3 * mm
-        sign_area_right = start_x + content_width - right_margin
+        # 日付を中央揃えで描画（年、月、日を分けて表示）
+        date_year_text = f"{record_date_year}"
+        date_month_text = f"{record_date_month}"
+        date_day_text = f"{record_date_day}"
         
-        # 日付欄（右寄せ、はみ出し防止）
-        date_text = f"{record_date_year} 年 {record_date_month} 月 {record_date_day} 日"
-        date_width = c.stringWidth(date_text, self.font_reg, 11)
-        # 右端からマージンを確保してはみ出しを防止（最小2mmのマージンを確保）
-        max_date_x = start_x + content_width - date_width - 2 * mm
-        date_x = min(sign_area_right - date_width, max_date_x)
-        # 左端を超えないようにする
-        date_x = max(date_x, start_x + 2 * mm)
-        c.drawString(date_x, sign_area_y, date_text)
+        # 各要素の幅を計算
+        year_width = c.stringWidth(date_year_text, self.font_reg, 11)
+        month_width = c.stringWidth(date_month_text, self.font_reg, 11)
+        day_width = c.stringWidth(date_day_text, self.font_reg, 11)
+        space_width = c.stringWidth(" ", self.font_reg, 11)
+        nen_width = c.stringWidth("年", self.font_reg, 11)
+        gatsu_width = c.stringWidth("月", self.font_reg, 11)
+        nichi_width = c.stringWidth("日", self.font_reg, 11)
+        
+        # 全体の幅を計算
+        total_date_width = year_width + space_width + nen_width + space_width + month_width + space_width + gatsu_width + space_width + day_width + space_width + nichi_width
+        
+        # 中央揃えで描画
+        date_start_x = start_x + (content_width - total_date_width) / 2
+        
+        x_pos = date_start_x
+        c.drawString(x_pos, date_y, date_year_text)
+        x_pos += year_width + space_width
+        c.drawString(x_pos, date_y, "年")
+        x_pos += nen_width + space_width
+        c.drawString(x_pos, date_y, date_month_text)
+        x_pos += month_width + space_width
+        c.drawString(x_pos, date_y, "月")
+        x_pos += gatsu_width + space_width
+        c.drawString(x_pos, date_y, date_day_text)
+        x_pos += day_width + space_width
+        c.drawString(x_pos, date_y, "日")
         
         # 改行後の氏名欄（右寄せ）
-        sign_area_y -= 20 * mm  # line-height: 2.5相当
+        sign_area_y = date_y - 20 * mm  # line-height: 2.5相当
+        
+        # 署名欄（HTMLでは右寄せ、margin-right: 20px）
+        right_margin = 5.3 * mm
+        sign_area_right = start_x + content_width - right_margin
         
         # 氏名ラベル
         name_label = "氏名"
         name_label_width = c.stringWidth(name_label, self.font_reg, 11)
-        name_label_x = sign_area_right - 66 * mm - 1.3 * mm - 20 * mm  # 下線幅 + 印鑑マージン + ラベルマージン
+        name_label_x = sign_area_right - 66 * mm - 1.3 * mm - name_label_width - 5 * mm  # 下線幅 + 印鑑マージン + ラベル幅 + マージン
         c.drawString(name_label_x, sign_area_y, name_label)
         
         # 氏名の下線（250px = 約66mm）
-        underline_x = name_label_x + 20 * mm  # ラベルの後10px = 約2.6mm、少し余裕を持たせる
+        underline_x = name_label_x + name_label_width + 5 * mm  # ラベルの後
         underline_width = 66 * mm
         c.setLineWidth(0.5)
         c.line(underline_x, sign_area_y - 2, underline_x + underline_width, sign_area_y - 2)
         
         # 印鑑マーク（下線の右側、margin-left: 5px = 約1.3mm）
         stamp_x = underline_x + underline_width + 1.3 * mm
-        c.setFont(self.font_reg, 8.8)  # 0.8em = 8.8pt
+        c.setFont(self.font_reg, 11)
         c.drawString(stamp_x, sign_area_y, "㊞")
         
         # 保存
