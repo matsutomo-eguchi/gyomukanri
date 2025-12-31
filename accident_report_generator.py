@@ -258,15 +258,11 @@ class AccidentReportGenerator:
                 Paragraph(
                     f'<para leading="13.86"><b>報告内容</b><br/>{report_content}</para>',
                     self.para_style
-                )
-            ],
-            [
+                ),
                 Paragraph(
                     f'<para leading="13.86"><b>報告者氏名</b><br/>{data.get("reporter_name", "")}</para>',
                     self.para_style
-                )
-            ],
-            [
+                ),
                 Paragraph(
                     f'<para leading="13.86" align="right"><b>記録日</b><br/>{record_date_year} 年 {record_date_month} 月 {record_date_day} 日</para>',
                     self.para_style
@@ -314,14 +310,12 @@ class AccidentReportGenerator:
         datetime_text = f'<para leading="13.86"><b>事故発生日時</b><br/>{date_year} 年 {date_month} 月 {date_day} 日<br/>{time_hour} 時 {time_min} 分頃<br/>（ {date_weekday} ）曜日</para>'
         
         info_row2_data = [
-            [Paragraph(datetime_text, self.para_style)],
             [
+                Paragraph(datetime_text, self.para_style),
                 Paragraph(
                     f'<para leading="13.86"><b>発生場所</b><br/>{data.get("location", "")}</para>',
                     self.para_style
-                )
-            ],
-            [
+                ),
                 Paragraph(
                     f'<para leading="13.86"><b>対象者</b><br/>{data.get("subject_name", "")}</para>',
                     self.para_style

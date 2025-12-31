@@ -106,7 +106,11 @@ class AIHelper:
             if response.status_code == 200:
                 result = response.json()
                 generated_text = result["choices"][0]["message"]["content"]
-                return True, generated_text.strip()
+                # 100字以内に制限
+                generated_text = generated_text.strip()
+                if len(generated_text) > 100:
+                    generated_text = generated_text[:100]
+                return True, generated_text
             else:
                 error_msg = f"APIエラー: {response.status_code} - {response.text}"
                 return False, error_msg
@@ -438,7 +442,7 @@ class AIHelper:
 - 専門用語は必要最小限にする
 - 簡潔で読みやすい文章にする
 - 常体で書く
-- 300字程度で記述する
+- 100字以内で記述する（厳守）
 
 {type_name}に関する文章のみを返してください。"""
         
@@ -474,7 +478,11 @@ class AIHelper:
             if response.status_code == 200:
                 result = response.json()
                 generated_text = result["choices"][0]["message"]["content"]
-                return True, generated_text.strip()
+                # 100字以内に制限
+                generated_text = generated_text.strip()
+                if len(generated_text) > 100:
+                    generated_text = generated_text[:100]
+                return True, generated_text
             else:
                 error_msg = f"APIエラー: {response.status_code} - {response.text}"
                 return False, error_msg
@@ -741,7 +749,7 @@ class AIHelper:
 - 専門用語は必要最小限にする
 - 簡潔で読みやすい文章にする
 - 常体で書く
-- 300字程度で記述する
+- 100字以内で記述する（厳守）
 
 {type_name}に関する文章のみを返してください。"""
         
@@ -777,7 +785,11 @@ class AIHelper:
             if response.status_code == 200:
                 result = response.json()
                 generated_text = result["choices"][0]["message"]["content"]
-                return True, generated_text.strip()
+                # 100字以内に制限
+                generated_text = generated_text.strip()
+                if len(generated_text) > 100:
+                    generated_text = generated_text[:100]
+                return True, generated_text
             else:
                 error_msg = f"APIエラー: {response.status_code} - {response.text}"
                 return False, error_msg
