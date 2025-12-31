@@ -1140,6 +1140,49 @@ def render_daily_report_form():
             render_accident_ai_assistant("incident_process", "process")
             render_accident_ai_assistant("incident_cause", "cause")
             render_accident_ai_assistant("incident_countermeasure", "countermeasure")
+            
+            # 報告内容のAIアシスト（フォーム外）
+            st.markdown("#### 🤖 AI文章作成アシスト（報告内容）")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                report_content_keywords = st.text_area(
+                    "キーワードや箇条書きを入力してください",
+                    height=60,
+                    key="keywords_report_content",
+                    placeholder="例: 転倒事故、プレイルーム、バランスボール"
+                )
+            with col2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                generate_report_content_btn = st.button("✨ 報告内容を生成", key="generate_report_content", use_container_width=True)
+            
+            if generate_report_content_btn and report_content_keywords:
+                with st.spinner("AIが報告内容を生成中..."):
+                    success, result = st.session_state.ai_helper.generate_report_content(report_content_keywords)
+                    if success:
+                        st.session_state["report_content"] = result
+                        st.success("報告内容を生成しました！")
+                    else:
+                        st.error(result)
+            
+            # 生成された文章の表示と適用
+            if "report_content" in st.session_state:
+                st.markdown("**生成された報告内容:**")
+                st.text_area(
+                    "プレビュー",
+                    value=st.session_state["report_content"],
+                    height=60,
+                    key="preview_report_content",
+                    disabled=True
+                )
+                col_apply, col_cancel = st.columns([1, 1])
+                with col_apply:
+                    if st.button("✅ この報告内容を使用", key="apply_report_content"):
+                        st.session_state["report_content"] = st.session_state["report_content"]
+                        st.rerun()
+                with col_cancel:
+                    if st.button("❌ キャンセル", key="cancel_report_content"):
+                        del st.session_state["report_content"]
+                        st.rerun()
         else:
             # ヒヤリハット報告書用のAIアシスト（フォーム外）
             render_hiyari_ai_assistant("hiyari_context", "context")
@@ -1153,6 +1196,17 @@ def render_daily_report_form():
         
         if form_incident_toggle:
             if form_report_type == "事故報告書（PDF）":
+                # 事業者名（フォーム内）
+                facility_name = st.text_input(
+                    "事業者名 *",
+                    key="facility_name",
+                    value=st.session_state.get("facility_name", ""),
+                    placeholder="例: 放課後等デイサービス"
+                )
+                
+                # 報告内容（セッション状態から取得）
+                report_content = st.session_state.get("report_content", "")
+                
                 # 詳細情報（フォーム内）
                 incident_situation = st.text_area(
                     "事故発生の状況 *",
@@ -1346,9 +1400,14 @@ def render_daily_report_form():
                         work_date = st.session_state.work_date
                         date_info = AccidentReportGenerator.format_date_for_report(work_date)
                         
+                        # セッション状態から事業者名と報告内容を取得
+                        facility_name = st.session_state.get("facility_name", "放課後等デイサービス")
+                        report_content = st.session_state.get("report_content", "")
+                        
                         # PDF生成用のデータを準備
                         pdf_data = {
-                            "facility_name": "放課後等デイサービス",  # 必要に応じて設定可能にする
+                            "facility_name": facility_name,
+                            "report_content": report_content,
                             "date_year": date_info["date_year"],
                             "date_month": date_info["date_month"],
                             "date_day": date_info["date_day"],

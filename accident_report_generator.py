@@ -272,8 +272,8 @@ class AccidentReportGenerator:
         ]
         
         header_right_col_widths = [
-            right_table_width * 0.70,  # 事業所名 70%
-            right_table_width * 0.30,  # 管理者 30%
+            right_table_width * 0.65,  # 事業所名 65%（バランス調整）
+            right_table_width * 0.35,  # 管理者 35%（少し広げる）
         ]
         
         header_right_table = Table(

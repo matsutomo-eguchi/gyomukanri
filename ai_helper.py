@@ -494,6 +494,89 @@ class AIHelper:
         except Exception as e:
             return False, f"予期しないエラーが発生しました: {str(e)}"
     
+        def generate_report_content(self, keywords: str) -> tuple:
+            """
+            報告内容の短い文章を生成
+
+            Args:
+                keywords: 箇条書きやキーワード
+
+            Returns:
+                (成功フラグ, 生成された文章)
+            """
+            if not self.is_available():
+                return False, "APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+
+            if not keywords or not keywords.strip():
+                return False, "キーワードを入力してください。"
+
+            prompt = f"""あなたは放課後等デイサービスのベテラン職員です。以下のキーワードや箇条書きを基に、報告内容の短い要約文を作成してください。
+
+    キーワード:
+    {keywords}
+
+    以下の点に注意してください:
+    - 簡潔で分かりやすい表現を使う
+    - 専門用語は必要最小限にする
+    - 50字以内で記述する（厳守）
+    - 常体で書く
+
+    報告内容の要約文のみを返してください。"""
+
+            try:
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
+
+                payload = {
+                    "model": self.model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "あなたは放課後等デイサービスのベテラン職員で、報告内容の要約が得意です。簡潔で分かりやすい文章を作成します。"
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 100
+                }
+
+                response = requests.post(
+                    self.api_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    generated_text = result["choices"][0]["message"]["content"].strip()
+                    # 50字以内に制限
+                    if len(generated_text) > 50:
+                        generated_text = generated_text[:50]
+                    return True, generated_text
+                else:
+                    error_msg = f"APIエラー: {response.status_code}"
+                    try:
+                        error_detail = response.json()
+                        if "error" in error_detail:
+                            error_msg = error_detail["error"].get("message", error_msg)
+                    except:
+                        pass
+                    return False, error_msg
+
+            except requests.exceptions.Timeout:
+                return False, "APIへの接続がタイムアウトしました。しばらく待ってから再試行してください。"
+            except requests.exceptions.RequestException as e:
+                return False, f"API接続エラー: {str(e)}"
+            except Exception as e:
+                return False, f"予期しないエラーが発生しました: {str(e)}"
+
+
     def is_gemini_available(self) -> bool:
         """Gemini APIキーが設定されているかチェック"""
         return GEMINI_AVAILABLE and self.gemini_api_key is not None and self.gemini_api_key.strip() != ""
