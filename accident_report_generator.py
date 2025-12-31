@@ -452,7 +452,13 @@ class AccidentReportGenerator:
         time_min = data.get("time_min", "")
         date_weekday = data.get("date_weekday", "")
         
-        datetime_text = f'<para leading="13.86"><b>事故発生日時</b><br/>{date_year} 年 {date_month} 月 {date_day} 日<br/>{time_hour} 時 {time_min} 分頃<br/>（ {date_weekday} ）曜日</para>'
+        # 分を2桁表示に変換
+        try:
+            time_min_formatted = str(int(time_min)).zfill(2) if time_min else ""
+        except (ValueError, TypeError):
+            time_min_formatted = str(time_min).zfill(2) if time_min else ""
+        
+        datetime_text = f'<para leading="13.86"><b>事故発生日時</b><br/>{date_year} 年 {date_month} 月 {date_day} 日<br/>{time_hour} 時 {time_min_formatted} 分頃<br/>（ {date_weekday} ）曜日</para>'
         
         # 対象者名を処理（複数の場合は「、」で区切る）
         subject_name = data.get("subject_name", "")

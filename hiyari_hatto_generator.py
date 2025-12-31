@@ -275,8 +275,9 @@ class HiyariHattoGenerator:
         where_col_width = content_width * 0.60
         doing_col_width = content_width * 0.30
         
-        # 日時テキストの作成
-        date_text = f"令和 {reiwa_year} 年 {dt.month} 月 {dt.day} 日 ( {weekday} 曜日)    {am_pm} {hour} 時 {minute} 分頃"
+        # 日時テキストの作成（分を2桁表示）
+        minute_formatted = f"{minute:02d}"
+        date_text = f"令和 {reiwa_year} 年 {dt.month} 月 {dt.day} 日 ( {weekday} 曜日)    {am_pm} {hour} 時 {minute_formatted} 分頃"
         
         # ラベル用スタイル（フォントサイズを大幅縮小）
         label_style = ParagraphStyle('Label', parent=self.styles['Normal'], fontName=self.font_bold, fontSize=8, alignment=TA_CENTER)
