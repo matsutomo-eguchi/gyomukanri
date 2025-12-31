@@ -125,6 +125,12 @@ if 'logged_in' not in st.session_state:
 if 'logged_in_user' not in st.session_state:
     st.session_state.logged_in_user = None
 
+# タイトル用のセッション状態の初期化
+if 'accident_title' not in st.session_state:
+    st.session_state.accident_title = ""
+if 'hiyari_title' not in st.session_state:
+    st.session_state.hiyari_title = ""
+
 # 定型タグの定義（初期値、データマネージャーから動的に取得される）
 LEARNING_TAGS_DEFAULT = [
     "プリント学習", "宿題", "SST（ソーシャルスキルトレーニング）", 
@@ -1121,10 +1127,12 @@ def render_daily_report_form():
                     key="incident_location",
                     placeholder="例: プレイルーム、送迎車内"
                 )
-                incident_subject = st.selectbox(
-                    "対象者 *",
-                    options=[""] + st.session_state.data_manager.get_active_users(),
-                    key="incident_subject"
+                incident_subject = st.multiselect(
+                    "対象者 *（複数選択可）",
+                    options=st.session_state.data_manager.get_active_users(),
+                    key="incident_subject",
+                    default=st.session_state.get("incident_subject", []),
+                    help="対象となる児童を複数選択できます。"
                 )
             
             with col2:
@@ -1149,48 +1157,6 @@ def render_daily_report_form():
             render_accident_ai_assistant("incident_cause", "cause")
             render_accident_ai_assistant("incident_countermeasure", "countermeasure")
             
-            # 報告内容のAIアシスト（フォーム外）
-            st.markdown("#### 🤖 AI文章作成アシスト（報告内容）")
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                report_content_keywords = st.text_area(
-                    "キーワードや箇条書きを入力してください",
-                    height=60,
-                    key="keywords_report_content",
-                    placeholder="例: 転倒事故、プレイルーム、バランスボール"
-                )
-            with col2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                generate_report_content_btn = st.button("✨ 報告内容を生成", key="generate_report_content", use_container_width=True)
-            
-            if generate_report_content_btn and report_content_keywords:
-                with st.spinner("AIが報告内容を生成中..."):
-                    success, result = st.session_state.ai_helper.generate_report_content(report_content_keywords)
-                    if success:
-                        st.session_state["report_content"] = result
-                        st.success("報告内容を生成しました！")
-                    else:
-                        st.error(result)
-            
-            # 生成された文章の表示と適用
-            if "report_content" in st.session_state:
-                st.markdown("**生成された報告内容:**")
-                st.text_area(
-                    "プレビュー",
-                    value=st.session_state["report_content"],
-                    height=60,
-                    key="preview_report_content",
-                    disabled=True
-                )
-                col_apply, col_cancel = st.columns([1, 1])
-                with col_apply:
-                    if st.button("✅ この報告内容を使用", key="apply_report_content"):
-                        st.session_state["report_content"] = st.session_state["report_content"]
-                        st.rerun()
-                with col_cancel:
-                    if st.button("❌ キャンセル", key="cancel_report_content"):
-                        del st.session_state["report_content"]
-                        st.rerun()
         else:
             # ヒヤリハット報告書用のAIアシスト（フォーム外）
             render_hiyari_ai_assistant("hiyari_context", "context")
@@ -1206,6 +1172,112 @@ def render_daily_report_form():
         
         if form_incident_toggle:
             if form_report_type == "事故報告書（PDF）":
+                # タイトル入力フィールド（直接入力可能、報告内容と連携）
+                st.markdown("#### 📝 タイトル生成")
+                
+                # キーワード入力欄
+                title_keywords = st.text_area(
+                    "キーワードや箇条書きを入力（タイトル生成用）",
+                    height=60,
+                    key="title_keywords",
+                    placeholder="例: 転倒事故、プレイルーム、バランスボール、児童A",
+                    help="タイトルを生成するためのキーワードや箇条書きを入力してください。複数のキーワードをカンマや改行で区切って入力できます。"
+                )
+                
+                # タイトル入力と生成ボタン
+                col1, col2, col3 = st.columns([2, 1, 1])
+                with col1:
+                    accident_title_input = st.text_input(
+                        "タイトル（「○○の件」形式で入力、または空欄で自動生成）",
+                        value=st.session_state.get("accident_title", ""),
+                        key="accident_title_input",
+                        placeholder="例: 転倒事故に関する件",
+                        help="タイトルを直接入力するか、キーワードから自動生成してください。「○○の件」形式で入力すると、報告内容の最初の行に自動的に反映されます。"
+                    )
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    generate_title_from_keywords = st.form_submit_button("✨ キーワードから生成", key="generate_title_from_keywords", use_container_width=True, help="キーワードからタイトルを自動生成します")
+                with col3:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    auto_generate_accident_title = st.form_submit_button("✨ 内容から生成", key="auto_generate_accident_title", use_container_width=True, help="入力済みの報告内容からタイトルを自動生成します")
+                
+                # キーワードからタイトル生成
+                if generate_title_from_keywords:
+                    if title_keywords and title_keywords.strip():
+                        with st.spinner("キーワードからタイトルを生成中..."):
+                            title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(title_keywords)
+                            if title_success and generated_title:
+                                # 生成結果をセッション状態に保存（プレビュー用）
+                                st.session_state["generated_title_preview"] = generated_title
+                                st.success(f"✅ タイトルを生成しました！")
+                                st.rerun()
+                            else:
+                                st.error("❌ タイトルの生成に失敗しました。")
+                    else:
+                        st.warning("⚠️ キーワードを入力してから生成ボタンを押してください。")
+                
+                # 報告内容からタイトル自動生成ボタンが押された場合
+                if auto_generate_accident_title:
+                    report_content = st.session_state.get("report_content", "")
+                    incident_situation = st.session_state.get("incident_situation", "")
+                    if report_content and report_content.strip():
+                        with st.spinner("タイトルを生成中..."):
+                            # 報告内容からタイトルを抽出（既にタイトルが含まれている場合はそれを使用）
+                            lines = report_content.split('\n')
+                            if lines and lines[0].strip().endswith("の件"):
+                                generated_title = lines[0].strip()
+                                st.session_state["generated_title_preview"] = generated_title
+                            else:
+                                title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(report_content)
+                                if title_success and generated_title:
+                                    st.session_state["generated_title_preview"] = generated_title
+                            st.rerun()
+                    elif incident_situation and incident_situation.strip():
+                        with st.spinner("タイトルを生成中..."):
+                            title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(incident_situation)
+                            if title_success and generated_title:
+                                st.session_state["generated_title_preview"] = generated_title
+                                st.rerun()
+                    else:
+                        st.warning("⚠️ 報告内容または事故発生の状況を入力してから自動生成ボタンを押してください。")
+                
+                # 生成結果のプレビュー表示
+                if "generated_title_preview" in st.session_state and st.session_state["generated_title_preview"]:
+                    st.markdown("---")
+                    st.markdown("### ✨ 生成結果プレビュー")
+                    st.info(f"**生成されたタイトル:**\n\n{st.session_state['generated_title_preview']}")
+                    
+                    col_apply, col_cancel = st.columns([1, 1])
+                    with col_apply:
+                        if st.form_submit_button("✅ このタイトルを使用", key="apply_generated_title", use_container_width=True):
+                            st.session_state["accident_title"] = st.session_state["generated_title_preview"]
+                            # プレビューをクリア
+                            del st.session_state["generated_title_preview"]
+                            st.rerun()
+                    with col_cancel:
+                        if st.form_submit_button("❌ キャンセル", key="cancel_generated_title", use_container_width=True):
+                            # プレビューをクリア
+                            del st.session_state["generated_title_preview"]
+                            st.rerun()
+                    st.markdown("---")
+                
+                # タイトルが変更された場合、報告内容の最初の行を更新
+                if accident_title_input and accident_title_input.strip():
+                    current_report_content = st.session_state.get("report_content", "")
+                    if current_report_content:
+                        lines = current_report_content.split('\n')
+                        # 最初の行がタイトル形式の場合、更新
+                        if lines and lines[0].strip().endswith("の件"):
+                            # タイトルを更新
+                            remaining_content = '\n'.join(lines[1:]).strip()
+                            if remaining_content:
+                                st.session_state["report_content"] = f"{accident_title_input.strip()}\n\n{remaining_content}"
+                            else:
+                                st.session_state["report_content"] = accident_title_input.strip()
+                        else:
+                            # タイトルがない場合、先頭に追加
+                            st.session_state["report_content"] = f"{accident_title_input.strip()}\n\n{current_report_content}"
+                
                 # 事業者名（フォーム内）
                 facility_name = st.text_input(
                     "事業者名 *",
@@ -1214,8 +1286,6 @@ def render_daily_report_form():
                     placeholder="例: 放課後等デイサービス"
                 )
                 
-                # 報告内容（セッション状態から取得）
-                report_content = st.session_state.get("report_content", "")
                 
                 # 詳細情報（フォーム内）
                 incident_situation = st.text_area(
@@ -1275,6 +1345,33 @@ def render_daily_report_form():
                 category_index = -1
                 hiyari_countermeasure = ""
             else:
+                # タイトル入力フィールド（直接入力可能）
+                st.markdown("#### 📝 タイトル（直接入力可能）")
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    hiyari_title_input = st.text_input(
+                        "タイトル（「○○の件」形式で入力、または空欄で自動生成）",
+                        value=st.session_state.get("hiyari_title", ""),
+                        key="hiyari_title_input",
+                        placeholder="例: 送迎時の転倒リスクに関する件",
+                        help="タイトルを直接入力してください。「○○の件」形式で入力すると自動的に適用されます。空欄の場合はヒヤリとした時のあらましから自動生成されます。"
+                    )
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    auto_generate_hiyari_title = st.form_submit_button("✨ 自動生成", key="auto_generate_hiyari_title", use_container_width=True, help="ヒヤリとした時のあらましからタイトルを自動生成します")
+                
+                # タイトル自動生成ボタンが押された場合
+                if auto_generate_hiyari_title:
+                    hiyari_details = st.session_state.get("hiyari_details", "")
+                    if hiyari_details and hiyari_details.strip():
+                        with st.spinner("タイトルを生成中..."):
+                            title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(hiyari_details)
+                            if title_success and generated_title:
+                                st.session_state.hiyari_title = generated_title
+                                st.rerun()
+                    else:
+                        st.warning("⚠️ ヒヤリとした時のあらましを入力してから自動生成ボタンを押してください。")
+                
                 # ヒヤリハット報告書用の入力フィールド（フォーム内）
                 hiyari_context = st.text_area(
                     "どうしていた時 *",
@@ -1382,9 +1479,65 @@ def render_daily_report_form():
             if form_incident_toggle and form_report_type == "事故報告書（PDF）":
                 # セッション状態から値を取得
                 incident_location = st.session_state.get("incident_location", "")
-                incident_subject = st.session_state.get("incident_subject", "")
+                incident_subject = st.session_state.get("incident_subject", [])
                 incident_time_hour = st.session_state.get("incident_time_hour", datetime.now().hour)
                 incident_time_min = st.session_state.get("incident_time_min", datetime.now().minute)
+                
+                # タイトルの処理（直接入力または自動生成）- 必ず「の件」形式を保証
+                accident_title = ""
+                accident_title_input = st.session_state.get("accident_title", "")
+                # AI生成の報告内容を優先的に使用
+                ai_generated_content = st.session_state.get("ai_generated_report_content", "")
+                report_content = st.session_state.get("report_content", "")
+                incident_situation = st.session_state.get("incident_situation", "")
+                
+                # タイトルが空欄でAI生成の報告内容がある場合、自動生成
+                if not accident_title_input or not accident_title_input.strip():
+                    if ai_generated_content and ai_generated_content.strip():
+                        # AI生成の報告内容からタイトルを抽出または生成
+                        lines = ai_generated_content.split('\n')
+                        if lines and lines[0].strip().endswith("の件"):
+                            # 既にタイトルが含まれている場合
+                            accident_title_input = lines[0].strip()
+                            st.session_state["accident_title"] = accident_title_input
+                        else:
+                            # タイトルを生成
+                            title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(ai_generated_content)
+                            if title_success and generated_title:
+                                accident_title_input = generated_title
+                                st.session_state["accident_title"] = accident_title_input
+                
+                if accident_title_input and accident_title_input.strip():
+                    # 直接入力されたタイトルを使用（必ず「の件」形式に変換）
+                    accident_title = st.session_state.ai_helper.ensure_title_format(accident_title_input.strip(), ai_generated_content if ai_generated_content else (report_content if report_content else incident_situation))
+                elif ai_generated_content and ai_generated_content.strip():
+                    # AI生成の報告内容から自動生成
+                    title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(ai_generated_content)
+                    if title_success and generated_title:
+                        accident_title = generated_title
+                    else:
+                        accident_title = st.session_state.ai_helper.ensure_title_format("", ai_generated_content)
+                elif report_content and report_content.strip():
+                    # タイトルが入力されていない場合は、報告内容から自動生成
+                    title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(report_content)
+                    if title_success and generated_title:
+                        accident_title = generated_title
+                    else:
+                        accident_title = st.session_state.ai_helper.ensure_title_format("", report_content)
+                elif incident_situation and incident_situation.strip():
+                    # 報告内容がない場合は、事故発生の状況から自動生成
+                    title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(incident_situation)
+                    if title_success and generated_title:
+                        accident_title = generated_title
+                    else:
+                        accident_title = st.session_state.ai_helper.ensure_title_format("", incident_situation)
+                else:
+                    # フォールバック
+                    accident_title = "事故報告の件"
+                
+                # 最終確認: 必ず「の件」で終わることを確認
+                if not accident_title.endswith("の件"):
+                    accident_title = accident_title + "の件"
                 
                 # バリデーション
                 errors = []
@@ -1412,7 +1565,24 @@ def render_daily_report_form():
                         
                         # セッション状態から事業者名と報告内容を取得
                         facility_name = st.session_state.get("facility_name", "放課後等デイサービス")
-                        report_content = st.session_state.get("report_content", "")
+                        # AI生成の報告内容を使用（report_content_inputの値は使用しない）
+                        report_content = st.session_state.get("ai_generated_report_content", "")
+                        
+                        # タイトルが入力されている場合、報告内容の先頭に追加
+                        if accident_title and accident_title.strip():
+                            title_text = accident_title.strip()
+                            # 報告内容にタイトルが既に含まれていない場合のみ追加
+                            if not report_content.startswith(title_text):
+                                if report_content:
+                                    report_content = f"{title_text}\n\n{report_content}"
+                                else:
+                                    report_content = title_text
+                        
+                        # 対象者名を文字列に変換（複数の場合は改行で区切る）
+                        if isinstance(incident_subject, list):
+                            subject_name_str = "\n".join(incident_subject) if incident_subject else ""
+                        else:
+                            subject_name_str = str(incident_subject) if incident_subject else ""
                         
                         # PDF生成用のデータを準備
                         pdf_data = {
@@ -1425,7 +1595,7 @@ def render_daily_report_form():
                             "time_hour": str(incident_time_hour).zfill(2),
                             "time_min": str(incident_time_min).zfill(2),
                             "location": incident_location,
-                            "subject_name": incident_subject,
+                            "subject_name": subject_name_str,
                             "situation": incident_situation,
                             "process": incident_process,
                             "cause": incident_cause,
@@ -1438,11 +1608,16 @@ def render_daily_report_form():
                             "record_date_day": date_info.get("record_date_day", date_info["date_day"])
                         }
                         
+                        # ファイル名にタイトルを使用（タイトルから「の件」を除いて使用）
+                        title_for_filename = accident_title.replace("の件", "") if accident_title.endswith("の件") else accident_title
+                        safe_title = title_for_filename.replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_").replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
+                        
                         # PDF生成用のデータをセッション状態に保存（フォーム外で処理）
                         st.session_state["pdf_generate_data"] = {
                             "type": "accident",
                             "pdf_data": pdf_data,
-                            "file_name": f"事故報告書_{work_date.strftime('%Y%m%d')}_{incident_subject}.pdf"
+                            "title": accident_title,
+                            "file_name": f"事故報告書_{work_date.strftime('%Y%m%d')}_{safe_title}.pdf"
                         }
                         st.success("✅ PDF報告書を生成しました！")
                             
@@ -1458,6 +1633,28 @@ def render_daily_report_form():
                 hiyari_countermeasure = st.session_state.get("hiyari_countermeasure", "")
                 hiyari_time_hour = st.session_state.get("hiyari_time_hour", datetime.now().hour)
                 hiyari_time_min = st.session_state.get("hiyari_time_min", datetime.now().minute)
+                
+                # タイトルの処理（直接入力または自動生成）- 必ず「の件」形式を保証
+                hiyari_title = ""
+                hiyari_title_input = st.session_state.get("hiyari_title", "")
+                
+                if hiyari_title_input and hiyari_title_input.strip():
+                    # 直接入力されたタイトルを使用（必ず「の件」形式に変換）
+                    hiyari_title = st.session_state.ai_helper.ensure_title_format(hiyari_title_input.strip(), hiyari_details if hiyari_details else "")
+                elif hiyari_details and hiyari_details.strip():
+                    # タイトルが入力されていない場合は、ヒヤリとした時のあらましから自動生成
+                    title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(hiyari_details)
+                    if title_success and generated_title:
+                        hiyari_title = generated_title
+                    else:
+                        hiyari_title = st.session_state.ai_helper.ensure_title_format("", hiyari_details)
+                else:
+                    # フォールバック
+                    hiyari_title = "ヒヤリハット報告の件"
+                
+                # 最終確認: 必ず「の件」で終わることを確認
+                if not hiyari_title.endswith("の件"):
+                    hiyari_title = hiyari_title + "の件"
                 selected_causes = []
                 for i in range(1, 13):
                     if st.session_state.get(f"cause_{i}", False):
@@ -1509,12 +1706,17 @@ def render_daily_report_form():
                             "countermeasure": hiyari_countermeasure
                         }
                         
+                        # ファイル名にタイトルを使用（タイトルから「の件」を除いて使用）
+                        title_for_filename = hiyari_title.replace("の件", "") if hiyari_title.endswith("の件") else hiyari_title
+                        safe_title = title_for_filename.replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_").replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
+                        
                         # PDF生成用のデータをセッション状態に保存（フォーム外で処理）
                         st.session_state["pdf_generate_data"] = {
                             "type": "hiyari",
                             "pdf_data": pdf_data,
                             "reporter_name": st.session_state.staff_name,
-                            "file_name": f"ヒヤリハット報告書_{work_date.strftime('%Y%m%d')}.pdf"
+                            "title": hiyari_title,
+                            "file_name": f"ヒヤリハット報告書_{work_date.strftime('%Y%m%d')}_{safe_title}.pdf"
                         }
                         st.success("✅ ヒヤリハット報告書PDFを生成しました！")
                             
@@ -2125,6 +2327,32 @@ def render_morning_meeting():
                 key="meeting_date"
             )
             
+            # タイトル入力フィールド（直接入力可能・目立つ位置に配置）
+            st.markdown("#### 📝 タイトル（直接入力可能）")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                title_input = st.text_input(
+                    "タイトル *（「○○の件」形式で入力、または空欄で自動生成）",
+                    value=st.session_state.get("meeting_title", ""),
+                    key="meeting_title_input",
+                    placeholder="例: 利用者送迎に関する件",
+                    help="タイトルを直接入力してください。「○○の件」形式で入力すると自動的に適用されます。空欄の場合は議題・内容から自動生成されます。"
+                )
+            with col2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                auto_generate_title = st.form_submit_button("✨ 自動生成", use_container_width=True, help="議題・内容からタイトルを自動生成します")
+            
+            # タイトル自動生成ボタンが押された場合
+            if auto_generate_title:
+                if agenda and agenda.strip():
+                    with st.spinner("タイトルを生成中..."):
+                        title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(agenda)
+                        if title_success and generated_title:
+                            st.session_state.meeting_title = generated_title
+                            st.rerun()
+                else:
+                    st.warning("⚠️ 議題・内容を入力してから自動生成ボタンを押してください。")
+            
             st.markdown("#### 議題・内容")
             agenda = st.text_area(
                 "議題・内容 *",
@@ -2132,29 +2360,6 @@ def render_morning_meeting():
                 key="meeting_agenda",
                 placeholder="朝礼で話し合った内容を記入してください"
             )
-            
-            # タイトル入力フィールド（直接入力可能）
-            st.markdown("#### タイトル")
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                title_input = st.text_input(
-                    "タイトル（「○○の件」形式）",
-                    value=st.session_state.get("meeting_title", ""),
-                    key="meeting_title_input",
-                    placeholder="例: 利用者送迎に関する件（空欄の場合は議題・内容から自動生成）",
-                    help="タイトルは「○○の件」形式で入力してください。空欄の場合は議題・内容から自動生成されます。"
-                )
-            with col2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                auto_generate_title = st.form_submit_button("✨ 自動生成", use_container_width=True)
-            
-            # タイトル自動生成ボタンが押された場合
-            if auto_generate_title and agenda and agenda.strip():
-                with st.spinner("タイトルを生成中..."):
-                    title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(agenda)
-                    if title_success and generated_title:
-                        st.session_state.meeting_title = generated_title
-                        st.rerun()
             
             st.markdown("#### 決定事項")
             decisions = st.text_area(
@@ -2783,25 +2988,39 @@ def main():
         render_login_page()
         return
     
+    # デバッグ情報（開発時のみ）
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = "日報入力"
+    
     # ログイン済みの場合は通常のアプリケーションを表示
     # サイドバーの描画（ウィジェットが自動的にセッション状態を更新）
     render_sidebar()
     
     # ページに応じたコンテンツを表示
-    if st.session_state.current_page == "日報入力":
-        render_daily_report_form()
-    elif st.session_state.current_page == "保存済み日報閲覧":
-        render_saved_reports_viewer()
-    elif st.session_state.current_page == "利用者記録閲覧":
-        render_daily_users_calendar()
-    elif st.session_state.current_page == "利用者マスタ管理":
-        render_user_master()
-    elif st.session_state.current_page == "朝礼議事録":
-        render_morning_meeting()
-    elif st.session_state.current_page == "設定":
-        render_settings()
+    try:
+        if st.session_state.current_page == "日報入力":
+            render_daily_report_form()
+        elif st.session_state.current_page == "保存済み日報閲覧":
+            render_saved_reports_viewer()
+        elif st.session_state.current_page == "利用者記録閲覧":
+            render_daily_users_calendar()
+        elif st.session_state.current_page == "利用者マスタ管理":
+            render_user_master()
+        elif st.session_state.current_page == "朝礼議事録":
+            render_morning_meeting()
+        elif st.session_state.current_page == "設定":
+            render_settings()
+        else:
+            st.warning(f"不明なページ: {st.session_state.current_page}")
+    except Exception as e:
+        st.error(f"ページの表示中にエラーが発生しました: {str(e)}")
+        st.exception(e)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        st.error(f"エラーが発生しました: {str(e)}")
+        st.exception(e)
 

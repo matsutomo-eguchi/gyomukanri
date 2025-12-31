@@ -422,8 +422,14 @@ class AccidentReportGenerator:
                     f'<para leading="13.86"><b>発生場所</b><br/>{data.get("location", "")}</para>',
                     self.para_style
                 ),
+                # 対象者名を処理（複数の場合は改行で区切る）
+                subject_name = data.get("subject_name", "")
+                if isinstance(subject_name, list):
+                    subject_name = "\n".join(subject_name) if subject_name else ""
+                # 対象者名が長い場合や複数の場合に備えて、フォントサイズを少し小さく
+                subject_text = f'<para leading="12"><b>対象者</b><br/><font size="10">{subject_name}</font></para>'
                 Paragraph(
-                    f'<para leading="13.86"><b>対象者</b><br/>{data.get("subject_name", "")}</para>',
+                    subject_text,
                     self.para_style
                 )
             ]
