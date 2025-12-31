@@ -571,36 +571,29 @@ class AccidentReportGenerator:
         right_margin = 5.3 * mm
         sign_area_right = start_x + content_width - right_margin
         
-        # 日付欄（右寄せ）
-        date_year_text = f"{record_date_year}"
-        date_month_text = f"{record_date_month}"
-        date_day_text = f"{record_date_day}"
-        
-        # 日付の各要素の幅を計算
-        year_width = c.stringWidth(date_year_text, self.font_reg, 11)
-        month_width = c.stringWidth(date_month_text, self.font_reg, 11)
-        day_width = c.stringWidth(date_day_text, self.font_reg, 11)
+        # 日付欄（右寄せ、空欄で「年　　月　　日」のみ表示）
         space_width = c.stringWidth(" ", self.font_reg, 11)
         nen_width = c.stringWidth("年", self.font_reg, 11)
         gatsu_width = c.stringWidth("月", self.font_reg, 11)
         nichi_width = c.stringWidth("日", self.font_reg, 11)
         
-        # 全体の幅を計算
-        total_date_width = year_width + space_width + nen_width + space_width + month_width + space_width + gatsu_width + space_width + day_width + space_width + nichi_width
+        # 空欄の幅を設定（適切な間隔）
+        blank_width = 15 * mm  # 空欄の幅
+        
+        # 全体の幅を計算（空欄 + 年 + 空欄 + 月 + 空欄 + 日）
+        total_date_width = blank_width + nen_width + blank_width + gatsu_width + blank_width + nichi_width
         
         # 右寄せで描画
         date_start_x = sign_area_right - total_date_width
         x_pos = date_start_x
-        c.drawString(x_pos, sign_area_y, date_year_text)
-        x_pos += year_width + space_width
+        # 空欄（年）
+        x_pos += blank_width
         c.drawString(x_pos, sign_area_y, "年")
-        x_pos += nen_width + space_width
-        c.drawString(x_pos, sign_area_y, date_month_text)
-        x_pos += month_width + space_width
+        x_pos += nen_width + blank_width
+        # 空欄（月）
         c.drawString(x_pos, sign_area_y, "月")
-        x_pos += gatsu_width + space_width
-        c.drawString(x_pos, sign_area_y, date_day_text)
-        x_pos += day_width + space_width
+        x_pos += gatsu_width + blank_width
+        # 空欄（日）
         c.drawString(x_pos, sign_area_y, "日")
         
         # 改行後の氏名欄（右寄せ、line-height: 2.5相当）
