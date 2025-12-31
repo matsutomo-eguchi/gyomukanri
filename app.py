@@ -1179,6 +1179,90 @@ def render_daily_report_form():
             # 基本情報セクション
             st.markdown("##### 📍 基本情報")
             
+            # 記入者名
+            default_reporter = st.session_state.get("staff_name", "")
+            hiyari_reporter = st.text_input(
+                "記入者名 *",
+                key="hiyari_reporter",
+                placeholder="記入者名を入力してください",
+                value=st.session_state.get("hiyari_reporter", default_reporter),
+                help="ヒヤリハット報告書の記入者名を入力してください"
+            )
+            
+            # 発生日時
+            st.markdown("**発生日時 ***")
+            col_date1, col_date2, col_date3, col_date4 = st.columns(4)
+            with col_date1:
+                # 現在の日付を取得してデフォルト値に設定
+                now = datetime.now()
+                hiyari_year = st.number_input(
+                    "年",
+                    min_value=2019,
+                    max_value=2100,
+                    value=st.session_state.get("hiyari_year", now.year),
+                    key="hiyari_year",
+                    help="発生日の年（西暦）"
+                )
+            with col_date2:
+                hiyari_month = st.number_input(
+                    "月",
+                    min_value=1,
+                    max_value=12,
+                    value=st.session_state.get("hiyari_month", now.month),
+                    key="hiyari_month",
+                    help="発生日の月"
+                )
+            with col_date3:
+                hiyari_day = st.number_input(
+                    "日",
+                    min_value=1,
+                    max_value=31,
+                    value=st.session_state.get("hiyari_day", now.day),
+                    key="hiyari_day",
+                    help="発生日の日"
+                )
+            with col_date4:
+                # 曜日を自動計算して表示
+                try:
+                    date_obj = datetime(hiyari_year, hiyari_month, hiyari_day)
+                    weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
+                    weekday_name = weekday_map[date_obj.weekday()]
+                    st.markdown(f"<br><strong>（{weekday_name}曜日）</strong>", unsafe_allow_html=True)
+                except ValueError:
+                    st.markdown("<br><strong>（-）</strong>", unsafe_allow_html=True)
+            
+            # 発生時刻
+            col_time1, col_time2, col_time3 = st.columns(3)
+            with col_time1:
+                hiyari_am_pm = st.selectbox(
+                    "午前/午後",
+                    options=["午前", "午後"],
+                    index=st.session_state.get("hiyari_am_pm", 1 if now.hour >= 12 else 0),
+                    key="hiyari_am_pm",
+                    help="発生時刻の午前/午後"
+                )
+            with col_time2:
+                hour_max = 12 if hiyari_am_pm == "午後" else 11
+                hour_min = 1 if hiyari_am_pm == "午後" else 0
+                current_hour = now.hour % 12 if now.hour % 12 != 0 else 12
+                hiyari_hour = st.number_input(
+                    "時",
+                    min_value=hour_min,
+                    max_value=hour_max,
+                    value=st.session_state.get("hiyari_hour", current_hour),
+                    key="hiyari_hour",
+                    help="発生時刻（時）"
+                )
+            with col_time3:
+                hiyari_minute = st.number_input(
+                    "分",
+                    min_value=0,
+                    max_value=59,
+                    value=st.session_state.get("hiyari_minute", now.minute),
+                    key="hiyari_minute",
+                    help="発生時刻（分）"
+                )
+            
             # 発生場所
             hiyari_location = st.text_input(
                 "発生場所 *",
@@ -1852,6 +1936,15 @@ def render_daily_report_form():
                 errors = []
                 error_details = []
                 
+                # 基本情報の取得
+                hiyari_reporter = st.session_state.get("hiyari_reporter", "")
+                hiyari_location = st.session_state.get("hiyari_location", "")
+                
+                # 基本情報のバリデーション
+                if not hiyari_reporter:
+                    errors.append("❌ **記入者名**を入力してください")
+                    error_details.append("→ フォーム外の「📋 ヒヤリハット報告詳細」セクションの「📍 基本情報」で「記入者名 *」に入力してください")
+                
                 if not hiyari_location:
                     errors.append("❌ **発生場所**を入力してください")
                     error_details.append("→ フォーム外の「📋 ヒヤリハット報告詳細」セクションの「📍 基本情報」で「発生場所 *」に入力してください")
@@ -1908,12 +2001,32 @@ def render_daily_report_form():
                         st.error(error)
                 else:
                     try:
-                        # 日時情報の準備
-                        work_date = st.session_state.work_date
-                        incident_datetime = datetime.combine(
-                            work_date,
-                            time(hiyari_time_hour, hiyari_time_min)
-                        )
+                        # 日時情報の準備（新しく追加した基本情報から取得）
+                        hiyari_year = st.session_state.get("hiyari_year", datetime.now().year)
+                        hiyari_month = st.session_state.get("hiyari_month", datetime.now().month)
+                        hiyari_day = st.session_state.get("hiyari_day", datetime.now().day)
+                        hiyari_am_pm = st.session_state.get("hiyari_am_pm", "午前")
+                        hiyari_hour = st.session_state.get("hiyari_hour", 9)
+                        hiyari_minute = st.session_state.get("hiyari_minute", 0)
+                        
+                        # 午前/午後の処理
+                        if hiyari_am_pm == "午後":
+                            if hiyari_hour < 12:
+                                hour_24 = hiyari_hour + 12
+                            else:
+                                hour_24 = hiyari_hour
+                        else:  # 午前
+                            if hiyari_hour == 12:
+                                hour_24 = 0
+                            else:
+                                hour_24 = hiyari_hour
+                        
+                        # datetimeオブジェクトを作成
+                        try:
+                            incident_datetime = datetime(hiyari_year, hiyari_month, hiyari_day, hour_24, hiyari_minute)
+                        except ValueError:
+                            # 無効な日付の場合は現在の日時を使用
+                            incident_datetime = datetime.now()
                         
                         # PDF生成用のデータを準備
                         pdf_data = {
@@ -1934,13 +2047,16 @@ def render_daily_report_form():
                         title_for_filename = hiyari_title.replace("の件", "") if hiyari_title.endswith("の件") else hiyari_title
                         safe_title = title_for_filename.replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_").replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
                         
+                        # 記入者名を取得
+                        hiyari_reporter = st.session_state.get("hiyari_reporter", st.session_state.get("staff_name", ""))
+                        
                         # PDF生成用のデータをセッション状態に保存（フォーム外で処理）
                         st.session_state["pdf_generate_data"] = {
                             "type": "hiyari",
                             "pdf_data": pdf_data,
-                            "reporter_name": st.session_state.staff_name,
+                            "reporter_name": hiyari_reporter,
                             "title": hiyari_title,
-                            "file_name": f"ヒヤリハット報告書_{work_date.strftime('%Y%m%d')}_{safe_title}.pdf"
+                            "file_name": f"ヒヤリハット報告書_{incident_datetime.strftime('%Y%m%d')}_{safe_title}.pdf"
                         }
                         st.success("✅ ヒヤリハット報告書PDFを生成しました！")
                             
@@ -2074,6 +2190,64 @@ def render_user_master():
             ])
             st.dataframe(df_active, use_container_width=True, hide_index=True)
             
+            # ソート機能
+            with st.expander("🔄 利用者の順番を並び替え"):
+                st.info("利用者マスタの表示順を変更できます。上下ボタンで順番を変更してください。")
+                
+                # セッション状態で順番を管理
+                if "user_sort_order" not in st.session_state:
+                    st.session_state.user_sort_order = [u["id"] for u in active_users]
+                
+                # 現在の順番を表示し、上下ボタンを配置
+                st.markdown("**現在の順番：**")
+                current_order = st.session_state.user_sort_order
+                
+                # 順番に基づいて利用者を並び替え
+                sorted_users_by_order = []
+                id_to_user = {u["id"]: u for u in active_users}
+                for user_id in current_order:
+                    if user_id in id_to_user:
+                        sorted_users_by_order.append(id_to_user[user_id])
+                
+                # 各利用者に上下ボタンを配置
+                for idx, user in enumerate(sorted_users_by_order):
+                    col1, col2, col3 = st.columns([1, 8, 1])
+                    with col1:
+                        move_up = st.button("↑", key=f"move_up_{user['id']}", disabled=(idx == 0))
+                    with col2:
+                        st.text(f"{idx + 1}. {user['name']} ({user.get('classification', '放課後等デイサービス')})")
+                    with col3:
+                        move_down = st.button("↓", key=f"move_down_{user['id']}", disabled=(idx == len(sorted_users_by_order) - 1))
+                    
+                    # 上に移動
+                    if move_up and idx > 0:
+                        current_order[idx], current_order[idx - 1] = current_order[idx - 1], current_order[idx]
+                        st.session_state.user_sort_order = current_order
+                        st.rerun()
+                    
+                    # 下に移動
+                    if move_down and idx < len(sorted_users_by_order) - 1:
+                        current_order[idx], current_order[idx + 1] = current_order[idx + 1], current_order[idx]
+                        st.session_state.user_sort_order = current_order
+                        st.rerun()
+                
+                # 順番を保存するボタン
+                if st.button("順番を保存", type="primary"):
+                    if dm.sort_users(current_order):
+                        st.success("✅ 利用者の順番を更新しました")
+                        # セッション状態をクリア
+                        if "user_sort_order" in st.session_state:
+                            del st.session_state.user_sort_order
+                        st.rerun()
+                    else:
+                        st.error("順番の更新に失敗しました")
+                
+                # リセットボタン
+                if st.button("リセット", type="secondary"):
+                    if "user_sort_order" in st.session_state:
+                        del st.session_state.user_sort_order
+                    st.rerun()
+            
             # 削除機能
             with st.expander("🗑️ 利用者を削除（無効化）"):
                 users_to_delete = st.multiselect(
@@ -2123,6 +2297,37 @@ def render_user_master():
                             st.rerun()
                     else:
                         st.warning("復元する利用者を選択してください")
+            
+            # 完全削除機能
+            with st.expander("⚠️ 利用者を完全に削除", expanded=False):
+                st.warning("⚠️ この操作は取り消せません。利用者データが完全に削除されます。")
+                st.caption("無効化された利用者のみ完全削除できます。")
+                
+                users_to_permanently_delete = st.multiselect(
+                    "完全に削除する利用者を選択",
+                    options=[u["name"] for u in inactive_users],
+                    key="users_to_permanently_delete"
+                )
+                
+                # 確認用のチェックボックス
+                confirm_delete = st.checkbox(
+                    "完全削除を実行することを確認しました",
+                    key="confirm_permanent_delete"
+                )
+                
+                if st.button("選択した利用者を完全に削除", type="primary", disabled=not confirm_delete):
+                    if users_to_permanently_delete:
+                        if confirm_delete:
+                            deleted_count = dm.permanently_delete_users(users_to_permanently_delete)
+                            if deleted_count > 0:
+                                st.success(f"✅ {deleted_count}名の利用者を完全に削除しました")
+                                st.rerun()
+                            else:
+                                st.error("完全削除に失敗しました")
+                        else:
+                            st.warning("確認チェックボックスにチェックを入れてください")
+                    else:
+                        st.warning("完全削除する利用者を選択してください")
 
 
 def render_saved_reports_viewer():

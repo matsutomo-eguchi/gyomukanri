@@ -412,6 +412,72 @@ class DataManager:
                 return True
         return False
     
+    def sort_users(self, user_ids: List[int]) -> bool:
+        """
+        利用者マスタの順番を並び替える
+        
+        Args:
+            user_ids: 新しい順番の利用者IDのリスト
+            
+        Returns:
+            成功した場合True
+        """
+        try:
+            users = self._load_master()
+            
+            # IDから利用者へのマッピングを作成
+            user_dict = {u["id"]: u for u in users}
+            
+            # 指定されたIDの順番で利用者を並び替え
+            sorted_users = []
+            for user_id in user_ids:
+                if user_id in user_dict:
+                    sorted_users.append(user_dict[user_id])
+            
+            # 指定されていない利用者を追加（アクティブな利用者を優先）
+            remaining_ids = set(user_dict.keys()) - set(user_ids)
+            remaining_users = [user_dict[uid] for uid in remaining_ids]
+            
+            # アクティブな利用者を先に、無効化された利用者を後に
+            active_remaining = [u for u in remaining_users if u.get("active", True)]
+            inactive_remaining = [u for u in remaining_users if not u.get("active", True)]
+            
+            sorted_users.extend(active_remaining)
+            sorted_users.extend(inactive_remaining)
+            
+            self._save_master(sorted_users)
+            return True
+        except Exception as e:
+            print(f"利用者ソートエラー: {e}")
+            return False
+    
+    def permanently_delete_users(self, names: List[str]) -> int:
+        """
+        利用者を完全に削除（マスタから削除）
+        
+        Args:
+            names: 完全に削除する利用者名のリスト
+            
+        Returns:
+            削除した件数
+        """
+        try:
+            users = self._load_master()
+            original_count = len(users)
+            
+            # 指定された名前の利用者を除外
+            users = [u for u in users if u["name"] not in names]
+            
+            deleted_count = original_count - len(users)
+            
+            if deleted_count > 0:
+                self._save_master(users)
+            
+            return deleted_count
+        except Exception as e:
+            print(f"利用者完全削除エラー: {e}")
+            return 0
+    
     def save_daily_report(self, report_data: Dict) -> bool:
         """
         日報データを保存（CSVとMarkdown形式の両方）
