@@ -3,6 +3,7 @@
 ReportLabを使用してヒヤリハット報告書のPDFを生成します
 HTMLテンプレートに忠実なレイアウトを実現します
 """
+import os
 import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -21,6 +22,7 @@ except (ImportError, AttributeError):
         pt = 1.0  # 1pt = 1.0 point
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -45,16 +47,64 @@ class HiyariHattoGenerator:
         self.width, self.height = A4
         self.margin = 15 * mm  # HTMLのpadding: 15mmに合わせる
         
-        # 日本語フォントの登録 (HeiseiMin=明朝体, HeiseiKakuGo=ゴシック体)
-        try:
-            pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3-Acro"))
-            pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5-Acro"))
-            self.font_reg = "HeiseiMin-W3-Acro"
-            self.font_bold = "HeiseiKakuGo-W5-Acro"
-        except Exception:
-            # フォント登録に失敗した場合のフォールバック
-            self.font_reg = "Helvetica"
-            self.font_bold = "Helvetica-Bold"
+        # 日本語フォントの登録
+        # macOSの標準日本語フォントを使用
+        font_registered = False
+        
+        # 明朝体の登録（優先順位順）
+        mincho_fonts = [
+            ("NotoSansJP", "/Library/Fonts/NotoSansJP-VariableFont_wght.ttf"),  # Noto Sans JP（可変フォント）
+            ("HiraginoMincho", "/System/Library/Fonts/ヒラギノ明朝 ProN.ttc"),  # ヒラギノ明朝
+        ]
+        
+        # ゴシック体の登録（優先順位順）
+        gothic_fonts = [
+            ("NotoGothic", "/Library/Fonts/NotoSansJP-VariableFont_wght.ttf"),  # Noto Sans JP（可変フォント）
+            ("HiraginoGothic", "/System/Library/Fonts/ヒラギノ角ゴシック W5.ttc"),  # ヒラギノ角ゴ W5
+            ("HiraginoGothicW3", "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"),  # ヒラギノ角ゴ W3
+        ]
+        
+        # 明朝体の登録
+        for font_name, font_path in mincho_fonts:
+            if os.path.exists(font_path):
+                try:
+                    # TTCファイルの場合はsubfontIndexを指定
+                    if font_path.endswith('.ttc'):
+                        pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=0))
+                    else:
+                        pdfmetrics.registerFont(TTFont(font_name, font_path))
+                    self.font_reg = font_name
+                    font_registered = True
+                    break
+                except Exception as e:
+                    continue
+        
+        # ゴシック体の登録
+        for font_name, font_path in gothic_fonts:
+            if os.path.exists(font_path):
+                try:
+                    # TTCファイルの場合はsubfontIndexを指定
+                    if font_path.endswith('.ttc'):
+                        pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=0))
+                    else:
+                        pdfmetrics.registerFont(TTFont(font_name, font_path))
+                    self.font_bold = font_name
+                    break
+                except Exception as e:
+                    continue
+        
+        # フォント登録に失敗した場合のフォールバック
+        if not font_registered:
+            try:
+                # UnicodeCIDFontを試す（Adobe Acrobatフォントがある場合）
+                pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3-Acro"))
+                pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5-Acro"))
+                self.font_reg = "HeiseiMin-W3-Acro"
+                self.font_bold = "HeiseiKakuGo-W5-Acro"
+            except Exception:
+                # 最終的なフォールバック
+                self.font_reg = "Helvetica"
+                self.font_bold = "Helvetica-Bold"
         
         # スタイルシートの準備
         self.styles = getSampleStyleSheet()

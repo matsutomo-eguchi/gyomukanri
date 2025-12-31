@@ -22,6 +22,7 @@ except (ImportError, AttributeError):
         pt = 1.0  # 1pt = 1.0 point
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -43,16 +44,64 @@ class AccidentReportGenerator:
         self.width, self.height = A4
         self.margin = 15 * mm  # HTMLの@page marginに合わせる
         
-        # 日本語フォントの登録 (HeiseiMin=明朝体, HeiseiKakuGo=ゴシック体)
-        try:
-            pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3-Acro"))
-            pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5-Acro"))
-            self.font_reg = "HeiseiMin-W3-Acro"
-            self.font_bold = "HeiseiKakuGo-W5-Acro"
-        except Exception:
-            # フォント登録に失敗した場合のフォールバック
-            self.font_reg = "Helvetica"
-            self.font_bold = "Helvetica-Bold"
+        # 日本語フォントの登録
+        # macOSの標準日本語フォントを使用
+        font_registered = False
+        
+        # 明朝体の登録（優先順位順）
+        mincho_fonts = [
+            ("NotoSansJP", "/Library/Fonts/NotoSansJP-VariableFont_wght.ttf"),  # Noto Sans JP（可変フォント）
+            ("HiraginoMincho", "/System/Library/Fonts/ヒラギノ明朝 ProN.ttc"),  # ヒラギノ明朝
+        ]
+        
+        # ゴシック体の登録（優先順位順）
+        gothic_fonts = [
+            ("NotoGothic", "/Library/Fonts/NotoSansJP-VariableFont_wght.ttf"),  # Noto Sans JP（可変フォント）
+            ("HiraginoGothic", "/System/Library/Fonts/ヒラギノ角ゴシック W5.ttc"),  # ヒラギノ角ゴ W5
+            ("HiraginoGothicW3", "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"),  # ヒラギノ角ゴ W3
+        ]
+        
+        # 明朝体の登録
+        for font_name, font_path in mincho_fonts:
+            if os.path.exists(font_path):
+                try:
+                    # TTCファイルの場合はsubfontIndexを指定
+                    if font_path.endswith('.ttc'):
+                        pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=0))
+                    else:
+                        pdfmetrics.registerFont(TTFont(font_name, font_path))
+                    self.font_reg = font_name
+                    font_registered = True
+                    break
+                except Exception as e:
+                    continue
+        
+        # ゴシック体の登録
+        for font_name, font_path in gothic_fonts:
+            if os.path.exists(font_path):
+                try:
+                    # TTCファイルの場合はsubfontIndexを指定
+                    if font_path.endswith('.ttc'):
+                        pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=0))
+                    else:
+                        pdfmetrics.registerFont(TTFont(font_name, font_path))
+                    self.font_bold = font_name
+                    break
+                except Exception as e:
+                    continue
+        
+        # フォント登録に失敗した場合のフォールバック
+        if not font_registered:
+            try:
+                # UnicodeCIDFontを試す（Adobe Acrobatフォントがある場合）
+                pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3-Acro"))
+                pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5-Acro"))
+                self.font_reg = "HeiseiMin-W3-Acro"
+                self.font_bold = "HeiseiKakuGo-W5-Acro"
+            except Exception:
+                # 最終的なフォールバック
+                self.font_reg = "Helvetica"
+                self.font_bold = "Helvetica-Bold"
         
         # スタイルシートの準備
         self.styles = getSampleStyleSheet()
@@ -90,6 +139,18 @@ class AccidentReportGenerator:
             fontSize=9.9,
             leading=13.86,
             alignment=TA_LEFT,
+        )
+        
+        # 本文テーブルのラベル用スタイル（横書き、太字、中央揃え）
+        self.body_label_style = ParagraphStyle(
+            'BodyLabel',
+            parent=self.styles['Normal'],
+            fontName=self.font_bold,
+            fontSize=11,
+            leading=15.4,
+            alignment=TA_CENTER,
+            spaceBefore=0,
+            spaceAfter=0,
         )
     
     def draw_vertical_text(self, canvas_obj, text, x, y, width, height, font_name, font_size):
@@ -211,7 +272,7 @@ class AccidentReportGenerator:
         )
         
         header_table_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 0.7, colors.black),  # 2px = 約0.7mm
+            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm（HTMLでは2px）
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('ALIGN', (0, 0), (0, 0), 'CENTER'),  # タイトル中央
             ('ALIGN', (1, 0), (1, 0), 'LEFT'),    # 事業所名左
@@ -283,7 +344,7 @@ class AccidentReportGenerator:
         )
         
         info_row1_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 0.7, colors.black),
+            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('ALIGN', (0, 0), (1, 0), 'LEFT'),  # 報告内容、報告者氏名は左
             ('ALIGN', (2, 0), (2, 0), 'RIGHT'),  # 記録日は右
@@ -336,7 +397,7 @@ class AccidentReportGenerator:
         )
         
         info_row2_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 0.7, colors.black),
+            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
@@ -351,7 +412,7 @@ class AccidentReportGenerator:
         current_y -= info_row2_h + 5 * mm
         
         # ===== 本文テーブル =====
-        # 縦書きカテゴリと横書き内容
+        # 横書きカテゴリと横書き内容
         # situationとprocessを統合
         situation_text = data.get("situation", "")
         process_text = data.get("process", "")
@@ -360,37 +421,39 @@ class AccidentReportGenerator:
         else:
             situation_full = situation_text
         
-        body_table_data = [
-            [
-                "",  # 縦書きテキストは後で描画
-                Paragraph(situation_full, self.para_style)
-            ],
-            [
-                "",
-                Paragraph(data.get("cause", ""), self.para_style)
-            ],
-            [
-                "",
-                Paragraph(data.get("countermeasure", ""), self.para_style)
-            ],
-            [
-                "",
-                Paragraph(data.get("others", ""), self.para_style)
-            ]
-        ]
-        
-        # 縦書きカテゴリのテキスト
-        vertical_labels = [
+        # 横書きカテゴリのテキスト
+        horizontal_labels = [
             "事故発生状況と経過",
             "事故原因",
             "対　策",
             "その他"
         ]
         
-        # 本文テーブルの列幅（縦書きカラム: 50px相当、内容カラム: 残り）
+        body_table_data = [
+            [
+                Paragraph(horizontal_labels[0], self.body_label_style),
+                Paragraph(situation_full, self.para_style)
+            ],
+            [
+                Paragraph(horizontal_labels[1], self.body_label_style),
+                Paragraph(data.get("cause", ""), self.para_style)
+            ],
+            [
+                Paragraph(horizontal_labels[2], self.body_label_style),
+                Paragraph(data.get("countermeasure", ""), self.para_style)
+            ],
+            [
+                Paragraph(horizontal_labels[3], self.body_label_style),
+                Paragraph(data.get("others", ""), self.para_style)
+            ]
+        ]
+        
+        # 本文テーブルの列幅（ラベルカラム: 適切な幅、内容カラム: 残り）
+        # HTMLでは左列が50px相当だが、横書きの場合はもう少し広くする
+        label_col_width = 60 * mm  # 横書きラベル用の幅
         body_col_widths = [
-            50 * mm,  # 縦書きカテゴリ
-            content_width - 50 * mm - 0.7 * 2,  # 内容（境界線分を引く）
+            label_col_width,  # 横書きカテゴリ
+            content_width - label_col_width - 1.0 * 2,  # 内容（境界線分を引く、2px = 約1.0mm）
         ]
         
         # 行の高さ（HTMLのheightに合わせる）
@@ -408,9 +471,9 @@ class AccidentReportGenerator:
         )
         
         body_table_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 0.7, colors.black),
+            ('GRID', (0, 0), (-1, -1), 1.0, colors.black),  # 2px = 約1.0mm
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # 縦書きカラム中央
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # ラベルカラム中央
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),    # 内容左
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
             ('RIGHTPADDING', (0, 0), (-1, -1), 5),
@@ -424,41 +487,7 @@ class AccidentReportGenerator:
         
         body_table.setStyle(body_table_style)
         body_w, body_h = body_table.wrapOn(c, content_width, content_height)
-        body_table_y = current_y - body_h
-        body_table.drawOn(c, start_x, body_table_y)
-        
-        # 縦書きテキストを描画
-        # テーブルの各セルの位置を計算（ReportLabのテーブル描画後の座標）
-        # ReportLabのテーブルは下から上に描画されるため、Y座標は下から上に累積
-        table_x = start_x
-        table_y = body_table_y
-        
-        # 各行のY位置を計算（下から上へ）
-        # 最初の行（最下段）から開始
-        cumulative_height = 0
-        for i in range(len(vertical_labels)):
-            # 下から数えてi行目のセルのY位置
-            cell_x = table_x
-            # 下から上に累積高さを計算（境界線の太さも考慮）
-            cell_y = table_y + cumulative_height
-            cell_width = body_col_widths[0]
-            cell_height = body_row_heights[i]
-            
-            # 縦書きテキストを描画（セルの中央に配置）
-            self.draw_vertical_text(
-                c,
-                vertical_labels[i],
-                cell_x,
-                cell_y,
-                cell_width,
-                cell_height,
-                self.font_bold,
-                11
-            )
-            
-            # 次の行のために累積高さを更新（境界線の太さ0.7mmも考慮）
-            cumulative_height += body_row_heights[i] + 0.7
-        
+        body_table.drawOn(c, start_x, current_y - body_h)
         current_y -= body_h + 10 * mm
         
         # ===== フッター =====
