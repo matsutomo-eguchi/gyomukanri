@@ -1119,46 +1119,147 @@ def render_daily_report_form():
         if report_type == "事故報告書（PDF）":
             st.markdown("#### 📋 事故報告詳細")
             
-            # 基本情報
+            # 基本情報セクション
+            st.markdown("##### 📍 基本情報")
+            
+            # 第1行: 発生場所と対象者
             col1, col2 = st.columns(2)
             with col1:
                 incident_location = st.text_input(
                     "発生場所 *",
                     key="incident_location",
-                    placeholder="例: プレイルーム、送迎車内"
+                    placeholder="例: プレイルーム、送迎車内",
+                    value=st.session_state.get("incident_location", ""),
+                    help="事故が発生した場所を入力してください"
                 )
+            
+            with col2:
                 incident_subject = st.multiselect(
                     "対象者 *（複数選択可）",
                     options=st.session_state.data_manager.get_active_users(),
                     key="incident_subject",
                     default=st.session_state.get("incident_subject", []),
-                    help="対象となる児童を複数選択できます。"
+                    help="対象となる児童を複数選択できます。PDF出力時は「、」で区切られます。"
                 )
             
-            with col2:
+            # 第2行: 発生時刻
+            col_time1, col_time2 = st.columns(2)
+            with col_time1:
                 incident_time_hour = st.number_input(
-                    "発生時刻（時）",
+                    "発生時刻（時） *",
                     min_value=0,
                     max_value=23,
-                    value=datetime.now().hour,
-                    key="incident_time_hour"
+                    value=st.session_state.get("incident_time_hour", datetime.now().hour),
+                    key="incident_time_hour",
+                    help="事故が発生した時刻（時）を入力してください"
                 )
+            with col_time2:
                 incident_time_min = st.number_input(
-                    "発生時刻（分）",
+                    "発生時刻（分） *",
                     min_value=0,
                     max_value=59,
-                    value=datetime.now().minute,
-                    key="incident_time_min"
+                    value=st.session_state.get("incident_time_min", datetime.now().minute),
+                    key="incident_time_min",
+                    help="事故が発生した時刻（分）を入力してください"
                 )
             
+            st.markdown("---")
+            
             # 詳細情報（AIアシストはフォーム外）
+            st.markdown("##### ✍️ 詳細情報（AIアシスト機能）")
             render_accident_ai_assistant("incident_situation", "situation")
             render_accident_ai_assistant("incident_process", "process")
             render_accident_ai_assistant("incident_cause", "cause")
             render_accident_ai_assistant("incident_countermeasure", "countermeasure")
             
         else:
-            # ヒヤリハット報告書用のAIアシスト（フォーム外）
+            # ヒヤリハット報告書セクション
+            st.markdown("#### 📋 ヒヤリハット報告詳細")
+            
+            # 基本情報セクション
+            st.markdown("##### 📍 基本情報")
+            
+            # 発生場所
+            hiyari_location = st.text_input(
+                "発生場所 *",
+                key="hiyari_location",
+                placeholder="例: プレイルーム、送迎車内",
+                value=st.session_state.get("hiyari_location", ""),
+                help="ヒヤリハットが発生した場所を入力してください"
+            )
+            
+            st.markdown("---")
+            
+            # 原因チェックリストセクション
+            st.markdown("##### 🔍 原因チェックリスト *")
+            st.caption("該当する項目を1つ以上選択してください")
+            
+            cause_items = {
+                1: "よく見え(聞こえ)なかった",
+                2: "気が付かなかった",
+                3: "忘れていた",
+                4: "知らなかった",
+                5: "深く考えなかった",
+                6: "大丈夫だと思った",
+                7: "あわてていた",
+                8: "不愉快なことがあった",
+                9: "疲れていた",
+                10: "無意識に手が動いた",
+                11: "やりにくかった",
+                12: "体のバランスを崩した"
+            }
+            
+            # 3列レイアウトでチェックボックスを配置（見やすくするため）
+            col_cause1, col_cause2, col_cause3 = st.columns(3)
+            with col_cause1:
+                for i in range(1, 5):
+                    st.checkbox(
+                        f"{i}. {cause_items[i]}",
+                        key=f"cause_{i}",
+                        value=st.session_state.get(f"cause_{i}", False)
+                    )
+            with col_cause2:
+                for i in range(5, 9):
+                    st.checkbox(
+                        f"{i}. {cause_items[i]}",
+                        key=f"cause_{i}",
+                        value=st.session_state.get(f"cause_{i}", False)
+                    )
+            with col_cause3:
+                for i in range(9, 13):
+                    st.checkbox(
+                        f"{i}. {cause_items[i]}",
+                        key=f"cause_{i}",
+                        value=st.session_state.get(f"cause_{i}", False)
+                    )
+            
+            st.markdown("---")
+            
+            # 分類セクション
+            st.markdown("##### 📂 分類 *")
+            st.caption("ヒヤリハットの原因となった分類を選択してください")
+            
+            category_options = [
+                "環境に問題があった",
+                "設備・機器等に問題があった",
+                "指導方法に問題があった",
+                "自分自身に問題があった"
+            ]
+            
+            # ラジオボタンで選択（見やすくするため）
+            hiyari_category = st.radio(
+                "分類を選択してください",
+                options=category_options,
+                key="hiyari_category",
+                index=category_options.index(st.session_state.get("hiyari_category", "")) if st.session_state.get("hiyari_category", "") in category_options else 0,
+                help="ヒヤリハットの原因となった分類を1つ選択してください",
+                horizontal=False
+            )
+            
+            st.markdown("---")
+            
+            # 詳細情報（AIアシストはフォーム外）
+            st.markdown("##### ✍️ 詳細情報（AIアシスト機能）")
             render_hiyari_ai_assistant("hiyari_context", "context")
             render_hiyari_ai_assistant("hiyari_details", "details")
             render_hiyari_ai_assistant("hiyari_countermeasure", "countermeasure")
@@ -1324,8 +1425,20 @@ def render_daily_report_form():
                     "その他",
                     height=80,
                     key="incident_others",
-                    placeholder="その他の情報があれば記入してください"
+                    placeholder="その他の情報があれば記入してください",
+                    value=st.session_state.get("incident_others", "")
                 )
+                
+                # フォーム外で入力した基本情報を確認表示
+                st.markdown("---")
+                st.markdown("#### ✅ 入力確認（フォーム外で入力した値）")
+                
+                # 発生場所の確認
+                incident_location_display = st.session_state.get("incident_location", "")
+                if incident_location_display:
+                    st.success(f"**✅ 発生場所:** {incident_location_display}")
+                else:
+                    st.error("❌ **発生場所を入力してください**（フォーム外の「基本情報」セクションで入力してください）")
                 
                 # 簡易版の詳細（従来の形式）
                 incident_detail = st.text_area(
@@ -1477,11 +1590,15 @@ def render_daily_report_form():
             form_report_type = st.session_state.get("report_type", "事故報告書（PDF）")
             
             if form_incident_toggle and form_report_type == "事故報告書（PDF）":
-                # セッション状態から値を取得
+                # セッション状態から値を取得（フォーム外で入力した値を使用）
                 incident_location = st.session_state.get("incident_location", "")
                 incident_subject = st.session_state.get("incident_subject", [])
                 incident_time_hour = st.session_state.get("incident_time_hour", datetime.now().hour)
                 incident_time_min = st.session_state.get("incident_time_min", datetime.now().minute)
+                
+                # デバッグ情報（開発時のみ）
+                if st.session_state.get("debug_mode", False):
+                    st.info(f"**デバッグ情報:**\n- 発生場所: {incident_location}\n- 対象者: {incident_subject}\n- 原因チェックリスト: {[i for i in range(1, 13) if st.session_state.get(f'accident_cause_{i}', False)]}\n- 分類: {st.session_state.get('accident_category', '')}")
                 
                 # タイトルの処理（直接入力または自動生成）- 必ず「の件」形式を保証
                 accident_title = ""
@@ -1541,22 +1658,39 @@ def render_daily_report_form():
                 
                 # バリデーション
                 errors = []
+                error_details = []
+                
                 if not incident_location:
-                    errors.append("発生場所を入力してください")
+                    errors.append("❌ **発生場所**を入力してください")
+                    error_details.append("→ フォーム外の「📋 事故報告詳細」セクションの「📍 基本情報」で「発生場所 *」に入力してください")
+                
                 if not incident_subject:
-                    errors.append("対象者を選択してください")
+                    errors.append("❌ **対象者**を選択してください")
+                    error_details.append("→ フォーム外の「📋 事故報告詳細」セクションの「📍 基本情報」で「対象者 *（複数選択可）」から選択してください")
+                
                 if not incident_situation:
-                    errors.append("事故発生の状況を入力してください")
+                    errors.append("❌ **事故発生の状況**を入力してください")
+                    error_details.append("→ フォーム内の「事故発生の状況 *」に入力するか、AIアシスト機能を使用してください")
+                
                 if not incident_process:
-                    errors.append("経過を入力してください")
+                    errors.append("❌ **経過**を入力してください")
+                    error_details.append("→ フォーム内の「経過 *」に入力するか、AIアシスト機能を使用してください")
+                
                 if not incident_cause:
-                    errors.append("事故原因を入力してください")
+                    errors.append("❌ **事故原因**を入力してください")
+                    error_details.append("→ フォーム内の「事故原因 *」に入力するか、AIアシスト機能を使用してください")
+                
                 if not incident_countermeasure:
-                    errors.append("対策を入力してください")
+                    errors.append("❌ **対策**を入力してください")
+                    error_details.append("→ フォーム内の「対策 *」に入力するか、AIアシスト機能を使用してください")
                 
                 if errors:
-                    for error in errors:
+                    st.error("### ⚠️ 入力エラーが発生しました")
+                    for i, error in enumerate(errors):
                         st.error(error)
+                        if i < len(error_details):
+                            st.caption(error_details[i])
+                    st.info("💡 **ヒント:** フォーム外の「📋 事故報告詳細」セクションで基本情報（発生場所、対象者、原因チェックリスト、分類）を入力し、フォーム内で詳細情報を入力してください。")
                 else:
                     try:
                         # 日付情報の準備
@@ -1655,10 +1789,13 @@ def render_daily_report_form():
                 # 最終確認: 必ず「の件」で終わることを確認
                 if not hiyari_title.endswith("の件"):
                     hiyari_title = hiyari_title + "の件"
+                # 原因チェックリストの選択状況を確認
                 selected_causes = []
                 for i in range(1, 13):
                     if st.session_state.get(f"cause_{i}", False):
                         selected_causes.append(i)
+                
+                # 分類の選択状況を確認
                 category_options = [
                     "環境に問題があった",
                     "設備・機器等に問題があった",
@@ -1670,18 +1807,39 @@ def render_daily_report_form():
                 
                 # バリデーション
                 errors = []
+                error_details = []
+                
                 if not hiyari_location:
-                    errors.append("発生場所を入力してください")
+                    errors.append("❌ **発生場所**を入力してください")
+                    error_details.append("→ フォーム外の「📋 ヒヤリハット報告詳細」セクションの「📍 基本情報」で「発生場所 *」に入力してください")
+                
                 if not hiyari_context:
-                    errors.append("どうしていた時を入力してください")
+                    errors.append("❌ **どうしていた時**を入力してください")
+                    error_details.append("→ フォーム内の「どうしていた時 *」に入力するか、AIアシスト機能を使用してください")
+                
                 if not hiyari_details:
-                    errors.append("ヒヤリとした時のあらましを入力してください")
+                    errors.append("❌ **ヒヤリとした時のあらまし**を入力してください")
+                    error_details.append("→ フォーム内の「ヒヤリとした時のあらまし *」に入力するか、AIアシスト機能を使用してください")
+                
                 if not selected_causes:
-                    errors.append("原因チェックリストから1つ以上選択してください")
+                    errors.append("❌ **原因チェックリスト**から1つ以上選択してください")
+                    error_details.append("→ フォーム外の「📋 ヒヤリハット報告詳細」セクションの「🔍 原因チェックリスト *」から該当する項目を選択してください")
+                
                 if category_index == -1:
-                    errors.append("分類を選択してください")
+                    errors.append("❌ **分類**を選択してください")
+                    error_details.append("→ フォーム外の「📋 ヒヤリハット報告詳細」セクションの「📂 分類 *」から選択してください")
+                
                 if not hiyari_countermeasure:
-                    errors.append("教訓・対策を入力してください")
+                    errors.append("❌ **教訓・対策**を入力してください")
+                    error_details.append("→ フォーム内の「教訓・対策 *」に入力するか、AIアシスト機能を使用してください")
+                
+                if errors:
+                    st.error("### ⚠️ 入力エラーが発生しました")
+                    for i, error in enumerate(errors):
+                        st.error(error)
+                        if i < len(error_details):
+                            st.caption(error_details[i])
+                    st.info("💡 **ヒント:** フォーム外の「📋 ヒヤリハット報告詳細」セクションで基本情報（発生場所、原因チェックリスト、分類）を入力し、フォーム内で詳細情報を入力してください。")
                 
                 if errors:
                     for error in errors:

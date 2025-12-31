@@ -2,6 +2,7 @@
 ヒヤリハット報告書PDF生成モジュール
 ReportLabを使用してヒヤリハット報告書のPDFを生成します
 HTMLテンプレートに忠実なレイアウトを実現します
+すべての文字は横書きで統一します
 """
 import os
 import datetime
@@ -10,16 +11,13 @@ from reportlab.pdfgen import canvas
 try:
     from reportlab.lib.units import mm, pt
 except (ImportError, AttributeError):
-    # ReportLabのバージョンによっては直接インポートできない場合があるため、
-    # モジュールをインポートして使用する
     try:
         import reportlab.lib.units as units
-        mm = getattr(units, 'mm', 2.834645669291339)  # 1mm = 2.834645669291339 points
-        pt = getattr(units, 'pt', 1.0)  # 1pt = 1.0 point
+        mm = getattr(units, 'mm', 2.834645669291339)
+        pt = getattr(units, 'pt', 1.0)
     except (ImportError, AttributeError):
-        # フォールバック: 標準的な値を直接定義
-        mm = 2.834645669291339  # 1mm = 2.834645669291339 points
-        pt = 1.0  # 1pt = 1.0 point
+        mm = 2.834645669291339
+        pt = 1.0
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase.ttfonts import TTFont
@@ -32,8 +30,8 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 class HiyariHattoGenerator:
     """
     ヒヤリハット報告書PDF生成クラス
-    AI（grok-4-1-fast-reasoning等）からの構造化データ入力を想定
     HTMLテンプレートに忠実に実装
+    すべての文字は横書きで統一
     """
 
     def __init__(self, filename="ヒヤリハット報告書.pdf"):
@@ -45,30 +43,28 @@ class HiyariHattoGenerator:
         """
         self.filename = filename
         self.width, self.height = A4
-        self.margin = 15 * mm  # HTMLのpadding: 15mmに合わせる
+        self.margin = 10 * mm  # A4縦に収めるため、マージンを最小限に
         
-        # 日本語フォントの登録
-        # macOSの標準日本語フォントを使用
+        # 日本語フォントの登録（明朝体を優先）
         font_registered = False
         
         # 明朝体の登録（優先順位順）
         mincho_fonts = [
-            ("NotoSansJP", "/Library/Fonts/NotoSansJP-VariableFont_wght.ttf"),  # Noto Sans JP（可変フォント）
-            ("HiraginoMincho", "/System/Library/Fonts/ヒラギノ明朝 ProN.ttc"),  # ヒラギノ明朝
+            ("HiraginoMincho", "/System/Library/Fonts/ヒラギノ明朝 ProN.ttc"),
+            ("NotoSansJP", "/Library/Fonts/NotoSansJP-VariableFont_wght.ttf"),
         ]
         
-        # ゴシック体の登録（優先順位順）
+        # ゴシック体の登録（太字用）
         gothic_fonts = [
-            ("NotoGothic", "/Library/Fonts/NotoSansJP-VariableFont_wght.ttf"),  # Noto Sans JP（可変フォント）
-            ("HiraginoGothic", "/System/Library/Fonts/ヒラギノ角ゴシック W5.ttc"),  # ヒラギノ角ゴ W5
-            ("HiraginoGothicW3", "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"),  # ヒラギノ角ゴ W3
+            ("HiraginoGothic", "/System/Library/Fonts/ヒラギノ角ゴシック W5.ttc"),
+            ("HiraginoGothicW3", "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"),
+            ("NotoGothic", "/Library/Fonts/NotoSansJP-VariableFont_wght.ttf"),
         ]
         
         # 明朝体の登録
         for font_name, font_path in mincho_fonts:
             if os.path.exists(font_path):
                 try:
-                    # TTCファイルの場合はsubfontIndexを指定
                     if font_path.endswith('.ttc'):
                         pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=0))
                     else:
@@ -76,33 +72,30 @@ class HiyariHattoGenerator:
                     self.font_reg = font_name
                     font_registered = True
                     break
-                except Exception as e:
+                except Exception:
                     continue
         
         # ゴシック体の登録
         for font_name, font_path in gothic_fonts:
             if os.path.exists(font_path):
                 try:
-                    # TTCファイルの場合はsubfontIndexを指定
                     if font_path.endswith('.ttc'):
                         pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=0))
                     else:
                         pdfmetrics.registerFont(TTFont(font_name, font_path))
                     self.font_bold = font_name
                     break
-                except Exception as e:
+                except Exception:
                     continue
         
         # フォント登録に失敗した場合のフォールバック
         if not font_registered:
             try:
-                # UnicodeCIDFontを試す（Adobe Acrobatフォントがある場合）
                 pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3-Acro"))
                 pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5-Acro"))
                 self.font_reg = "HeiseiMin-W3-Acro"
                 self.font_bold = "HeiseiKakuGo-W5-Acro"
             except Exception:
-                # 最終的なフォールバック
                 self.font_reg = "Helvetica"
                 self.font_bold = "Helvetica-Bold"
         
@@ -125,7 +118,7 @@ class HiyariHattoGenerator:
             11: "やりにくかった",
             12: "体のバランスを崩した"
         }
-
+        
         # 分類
         self.categories = [
             "環境に問題があった",
@@ -136,19 +129,20 @@ class HiyariHattoGenerator:
     
     def setup_custom_styles(self):
         """カスタムスタイルの設定"""
-        # 本文用スタイル（11pt、明朝体、line-height: 1.4）
+        # 本文用スタイル（8pt、明朝体、line-height: 1.15、A4縦に収めるため大幅縮小）
         self.para_style = ParagraphStyle(
             'CustomBody',
             parent=self.styles['Normal'],
             fontName=self.font_reg,
-            fontSize=11,
-            leading=15.4,  # line-height: 1.4
+            fontSize=8,
+            leading=9.2,  # line-height: 1.15
             alignment=TA_LEFT,
             spaceBefore=0,
             spaceAfter=0,
+            wordWrap='CJK',  # 日本語の自動折り返し
         )
         
-        # セクションタイトル用スタイル（16px、太字）
+        # セクションタイトル用スタイル（16pt、太字）
         self.section_style = ParagraphStyle(
             'SectionTitle',
             parent=self.styles['Normal'],
@@ -160,46 +154,6 @@ class HiyariHattoGenerator:
             spaceAfter=0,
         )
     
-    def draw_vertical_text(self, canvas_obj, text, x, y, width, height, font_name, font_size):
-        """
-        縦書きテキストを描画
-        
-        Args:
-            canvas_obj: Canvasオブジェクト
-            text: 描画するテキスト
-            x, y: テキストの基準位置（左下、セルの左下）
-            width, height: セルの幅と高さ
-            font_name: フォント名
-            font_size: フォントサイズ
-        """
-        canvas_obj.saveState()
-        
-        # セルの中央に配置
-        center_x = x + width / 2
-        center_y = y + height / 2
-        
-        # 文字間隔を計算（letter-spacing: 0.5em）
-        char_spacing = font_size * 0.5
-        
-        # テキストの総高さを計算
-        total_height = len(text) * (font_size + char_spacing) - char_spacing
-        
-        # 開始位置を計算（中央から上に）
-        start_y = center_y + total_height / 2 - font_size
-        
-        # 各文字を縦に配置
-        for i, char in enumerate(text):
-            char_y = start_y - i * (font_size + char_spacing)
-            canvas_obj.saveState()
-            canvas_obj.translate(center_x, char_y)
-            canvas_obj.rotate(90)
-            canvas_obj.setFont(font_name, font_size)
-            char_width = canvas_obj.stringWidth(char, font_name, font_size)
-            canvas_obj.drawString(-char_width / 2, 0, char)
-            canvas_obj.restoreState()
-        
-        canvas_obj.restoreState()
-    
     def px_to_mm(self, px_value):
         """
         px値をmm値に変換（1px ≈ 0.264583mm）
@@ -210,7 +164,7 @@ class HiyariHattoGenerator:
         Returns:
             mm値
         """
-        return px_value * 0.264583
+        return px_value * 0.264583 * mm
     
     def draw_circle(self, canvas_obj, x, y, radius, filled=False):
         """
@@ -262,42 +216,40 @@ class HiyariHattoGenerator:
         current_y = start_y
 
         # ===== タイトル =====
-        # HTML: font-size: 24px, text-align: center, margin-bottom: 30px, letter-spacing: 2px
-        title_y = current_y - self.px_to_mm(30)  # 30px margin-bottomをmmに変換
-        c.setFont(self.font_bold, 24)
+        # A4縦に収めるため、マージンを最小限に
+        title_y = current_y - 6 * mm  # margin-bottom: 6mm
+        c.setFont(self.font_bold, 16)  # フォントサイズをさらに縮小
         title_text = "ヒヤリハット報告書"
-        title_width = c.stringWidth(title_text, self.font_bold, 24)
+        title_width = c.stringWidth(title_text, self.font_bold, 16)
         c.drawString((self.width - title_width) / 2, title_y, title_text)
-        current_y = title_y - self.px_to_mm(30)  # margin-bottom: 30px
+        current_y = title_y - 6 * mm  # margin-bottom: 6mm
 
         # ===== 記入者欄 =====
-        # HTML: text-align: right, border-bottom: 1px solid black, width: 150px
-        reporter_y = current_y - self.px_to_mm(5)  # margin-bottom: 5px
-        c.setFont(self.font_reg, 11)
+        reporter_y = current_y - 1.5 * mm
+        c.setFont(self.font_reg, 9)  # フォントサイズをさらに縮小
         reporter_label = "記入者"
         reporter_input = reporter_name if reporter_name else ""
         
         # 右寄せで描画
-        label_width = c.stringWidth(reporter_label, self.font_reg, 11)
-        input_width = self.px_to_mm(150)  # 150pxをmmに変換
+        label_width = c.stringWidth(reporter_label, self.font_reg, 9)
+        input_width = 90 * mm / 25.4  # 入力欄の幅をさらに縮小
         input_x = self.width - self.margin - input_width
-        label_x = input_x - label_width - 3 * mm
+        label_x = input_x - label_width - 1 * mm
         
         c.drawString(label_x, reporter_y, reporter_label)
         # 下線を描画
-        c.setLineWidth(1)
-        c.line(input_x, reporter_y - 2, input_x + input_width, reporter_y - 2)
+        c.setLineWidth(0.5)
+        c.line(input_x, reporter_y - 1, input_x + input_width, reporter_y - 1)
         if reporter_input:
-            c.drawString(input_x + 2 * mm, reporter_y, reporter_input)
+            c.drawString(input_x + 0.5 * mm, reporter_y, reporter_input)
         
-        current_y = reporter_y - self.px_to_mm(5)  # margin-bottom: 5px
+        current_y = reporter_y - 1.5 * mm
 
         # ===== 【概要】セクション =====
-        # HTML: section-title, font-size: 16px, margin-top: 20px, margin-bottom: 5px
-        current_y -= self.px_to_mm(20)  # margin-top: 20px
-        c.setFont(self.font_bold, 16)
+        current_y -= 4 * mm  # margin-top: 4mm
+        c.setFont(self.font_bold, 11)  # フォントサイズをさらに縮小
         c.drawString(start_x, current_y, "【概要】")
-        current_y -= self.px_to_mm(5)  # margin-bottom: 5px
+        current_y -= 1.5 * mm  # margin-bottom: 1.5mm
 
         # 日時の処理
         dt = data.get('datetime')
@@ -317,12 +269,7 @@ class HiyariHattoGenerator:
         hour = dt.hour % 12 if dt.hour % 12 != 0 else 12
         minute = dt.minute
 
-        # 概要テーブル
-        # HTML: テーブル構造
-        # 行1: "いつ"（縦書き、letter-spacing: 0.5em）| 日時入力（colspan=2）
-        # 行2: "どこで"（縦書き）| テキストエリア（60%幅、100px高さ）| "どうしていた時"（縦書き）| テキストエリア（30%幅、80px高さ）
-        # 行3: "ヒヤリとした時のあらまし"（縦書き）| テキストエリア（colspan=2、120px高さ）
-        
+        # 概要テーブル（すべて横書き）
         # 列幅の計算（HTML: col-label-narrow: 10%, col-where: 60%, col-doing: 30%）
         label_col_width = content_width * 0.10
         where_col_width = content_width * 0.60
@@ -331,38 +278,48 @@ class HiyariHattoGenerator:
         # 日時テキストの作成
         date_text = f"令和 {reiwa_year} 年 {dt.month} 月 {dt.day} 日 ( {weekday} 曜日)    {am_pm} {hour} 時 {minute} 分頃"
         
+        # ラベル用スタイル（フォントサイズを大幅縮小）
+        label_style = ParagraphStyle('Label', parent=self.styles['Normal'], fontName=self.font_bold, fontSize=8, alignment=TA_CENTER)
+        label_style_reg = ParagraphStyle('LabelReg', parent=self.styles['Normal'], fontName=self.font_reg, fontSize=8, alignment=TA_CENTER)
+        
+        # テーブルデータ（すべて横書き、4列構造）
         summary_data = [
-            ["", date_text, ""],  # 行1: "いつ"は後で縦書きで描画
-            ["", Paragraph(data.get('location', ''), self.para_style), Paragraph(data.get('context', ''), self.para_style)],
-            ["", Paragraph(data.get('details', ''), self.para_style), ""]
+            [Paragraph("い　つ", label_style), 
+             Paragraph(date_text, self.para_style), "", ""],  # 行1: 列2-3を結合
+            [Paragraph("どこで", label_style_reg), 
+             Paragraph(data.get('location', ''), self.para_style),
+             Paragraph("どうして<br/>い た 時", label_style),
+             Paragraph(data.get('context', ''), self.para_style)],  # 行2
+            [Paragraph("ヒヤリとした<br/>時のあらまし", label_style_reg), 
+             Paragraph(data.get('details', ''), self.para_style), "", ""]  # 行3: 列2-3を結合
         ]
         
-        # 行の高さ（HTML: 100px, 80px, 120px）
+        # 行の高さ（A4縦に収めるため大幅に縮小）
         summary_row_heights = [
-            15 * mm,  # 行1（日時行）
-            self.px_to_mm(100),  # 行2（どこで/どうしていた時）
-            self.px_to_mm(120),  # 行3（あらまし）
+            8 * mm,  # 行1（日時行）
+            14 * mm,  # 行2（どこで/どうしていた時）
+            16 * mm,  # 行3（あらまし）
         ]
         
         summary_table = Table(
             summary_data,
-            colWidths=[label_col_width, where_col_width, doing_col_width],
+            colWidths=[label_col_width, where_col_width, label_col_width, doing_col_width],
             rowHeights=summary_row_heights
         )
         
         summary_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),  # border: 1px solid #000
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-            ('ALIGN', (2, 0), (2, -1), 'LEFT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-            # 行1の列2と列3を結合（colspan=2）
-            ('SPAN', (1, 0), (2, 0)),
-            # 行3の列2と列3を結合（colspan=2）
-            ('SPAN', (1, 2), (2, 2)),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # 線の太さを縮小
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # ラベル列中央
+            ('ALIGN', (2, 1), (2, 1), 'CENTER'),  # 行2の「どうしていた時」ラベル中央
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),   # 内容列左
+            ('ALIGN', (3, 1), (3, 1), 'LEFT'),    # 行2の内容列左
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('SPAN', (1, 0), (3, 0)),  # 行1の列2-3を結合
+            ('SPAN', (1, 2), (3, 2)),  # 行3の列2-3を結合
         ])
         
         summary_table.setStyle(summary_style)
@@ -370,38 +327,18 @@ class HiyariHattoGenerator:
         summary_table_y = current_y - summary_h
         summary_table.drawOn(c, start_x, summary_table_y)
         
-        # 縦書きテキストを描画
-        # 行1: "いつ"（letter-spacing: 0.5em）
-        cell_x = start_x
-        cell_y = summary_table_y + summary_row_heights[2] + summary_row_heights[1]  # 下から2行目
-        self.draw_vertical_text(c, "いつ", cell_x, cell_y, label_col_width, summary_row_heights[0], self.font_bold, 11)
-        
-        # 行2: "どこで"
-        cell_y = summary_table_y + summary_row_heights[2]  # 下から1行目
-        self.draw_vertical_text(c, "どこで", cell_x, cell_y, label_col_width, summary_row_heights[1], self.font_reg, 11)
-        
-        # 行2: "どうしていた時"（右側の列）
-        doing_label_x = start_x + label_col_width + where_col_width
-        self.draw_vertical_text(c, "どうして\nい た 時", doing_label_x, cell_y, doing_col_width, summary_row_heights[1], self.font_bold, 11)
-        
-        # 行3: "ヒヤリとした時のあらまし"
-        cell_y = summary_table_y  # 最下段
-        self.draw_vertical_text(c, "ヒヤリとした\n時のあらまし", cell_x, cell_y, label_col_width, summary_row_heights[2], self.font_reg, 11)
-        
-        current_y = summary_table_y - self.px_to_mm(20)  # margin-bottom: 20px
+        current_y = summary_table_y - 4 * mm  # margin-bottom: 4mm
 
         # ===== 【原因】セクション =====
-        # HTML: section-title, font-size: 16px, margin-top: 20px, margin-bottom: 5px
-        current_y -= self.px_to_mm(20)  # margin-top: 20px
-        c.setFont(self.font_bold, 16)
+        current_y -= 4 * mm  # margin-top: 4mm
+        c.setFont(self.font_bold, 11)  # フォントサイズをさらに縮小
         c.drawString(start_x, current_y, "【原因】")
-        current_y -= self.px_to_mm(5)  # margin-bottom: 5px
+        current_y -= 1.5 * mm  # margin-bottom: 1.5mm
 
         # 原因テーブル
-        # HTML: ヘッダー行（背景色#f9f9f9、14px、通常フォント）+ データ行（4列のテキストエリア、各100px高さ）
         category_index = data.get('category_index', -1)
         
-        # 各カテゴリのテキストを取得（dataから、なければ空文字列）
+        # 各カテゴリのテキストを取得
         category_texts = {
             0: data.get('cause_environment', ''),
             1: data.get('cause_equipment', ''),
@@ -409,8 +346,13 @@ class HiyariHattoGenerator:
             3: data.get('cause_self', '')
         }
         
-        # テーブルデータ: ヘッダー行 + データ行
-        cause_header_row = [self.categories[0], self.categories[1], self.categories[2], self.categories[3]]
+        # テーブルデータ: ヘッダー行 + データ行（フォントサイズを大幅縮小）
+        cause_header_row = [
+            Paragraph(self.categories[0], ParagraphStyle('CauseHeader', parent=self.styles['Normal'], fontName=self.font_reg, fontSize=8, alignment=TA_LEFT)),
+            Paragraph(self.categories[1], ParagraphStyle('CauseHeader', parent=self.styles['Normal'], fontName=self.font_reg, fontSize=8, alignment=TA_LEFT)),
+            Paragraph(self.categories[2], ParagraphStyle('CauseHeader', parent=self.styles['Normal'], fontName=self.font_reg, fontSize=8, alignment=TA_LEFT)),
+            Paragraph(self.categories[3], ParagraphStyle('CauseHeader', parent=self.styles['Normal'], fontName=self.font_reg, fontSize=8, alignment=TA_LEFT))
+        ]
         cause_data_row = [
             Paragraph(category_texts[0], self.para_style),
             Paragraph(category_texts[1], self.para_style),
@@ -424,55 +366,50 @@ class HiyariHattoGenerator:
         cause_table = Table(
             cause_table_data,
             colWidths=[cause_col_width] * 4,
-            rowHeights=[None, self.px_to_mm(100)]  # ヘッダー行は自動、データ行は100px
+            rowHeights=[None, 12 * mm]  # ヘッダー行は自動、データ行の高さをさらに縮小
         )
         
         cause_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # 線の太さを縮小
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # ヘッダー行中央
+            ('ALIGN', (0, 0), (-1, 0), 'LEFT'),  # ヘッダー行左
             ('ALIGN', (0, 1), (-1, 1), 'LEFT'),    # データ行左
-            ('FONT', (0, 0), (-1, 0), self.font_reg, 14),  # ヘッダー行: 14px
-            ('FONT', (0, 1), (-1, 1), self.font_reg, 11),  # データ行: 11px
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f9f9f9')),  # ヘッダー背景色
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ])
         
         cause_table.setStyle(cause_style)
         cause_w, cause_h = cause_table.wrapOn(c, content_width, content_height)
         cause_table_y = current_y - cause_h
         cause_table.drawOn(c, start_x, cause_table_y)
-        current_y = cause_table_y - self.px_to_mm(5)  # margin-bottom: 5px
+        current_y = cause_table_y - 1.5 * mm  # margin-bottom: 1.5mm
 
         # ===== 矢印 =====
-        # HTML: arrow-container, text-align: right, padding-right: 12%, margin-top: -15px, margin-bottom: 5px, font-size: 30px
-        current_y -= self.px_to_mm(-15)  # margin-top: -15px（上に移動）
+        current_y -= 2 * mm  # margin-top調整
         arrow_x = start_x + content_width - (content_width * 0.12)  # padding-right: 12%
-        c.setFont(self.font_reg, 30)
+        c.setFont(self.font_reg, 16)  # フォントサイズをさらに縮小
         c.drawString(arrow_x, current_y, "⇩")
-        current_y -= self.px_to_mm(5)  # margin-bottom: 5px
+        current_y -= 1.5 * mm  # margin-bottom: 1.5mm
 
         # ===== 【教訓・対策】セクション =====
-        # HTML: section-title + "該当する事項に○をつける"（右寄せ、14px）
-        current_y -= self.px_to_mm(20)  # margin-top: 20px（section-titleのmargin-top）
+        current_y -= 4 * mm  # margin-top: 4mm
         
         # セクションタイトルと説明文を横並びに
-        c.setFont(self.font_bold, 16)
+        c.setFont(self.font_bold, 11)  # フォントサイズをさらに縮小
         c.drawString(start_x, current_y, "【教訓・対策】")
         
         # 説明文（右寄せ）
         instruction_text = "該当する事項に○をつける"
-        c.setFont(self.font_reg, 14)
-        instruction_width = c.stringWidth(instruction_text, self.font_reg, 14)
+        c.setFont(self.font_reg, 9)  # フォントサイズをさらに縮小
+        instruction_width = c.stringWidth(instruction_text, self.font_reg, 9)
         c.drawString(start_x + content_width - instruction_width, current_y, instruction_text)
         
-        current_y -= self.px_to_mm(5)  # margin-bottom: 5px
+        current_y -= 1.5 * mm  # margin-bottom: 1.5mm
 
         # 教訓・対策テーブル
-        # HTML: 左列（60%幅、350px高さのテキストエリア）+ 右列（チェックリスト）
         countermeasure = data.get('countermeasure', '')
         selected_indices = data.get('cause_indices', [])
         
@@ -484,21 +421,46 @@ class HiyariHattoGenerator:
             [Paragraph(countermeasure, self.para_style), ""]  # 右列は空、後で手動描画
         ]
         
+        # A4縦に収めるため、残りの高さを正確に計算
+        # 現在のY位置から下マージンまでの高さを計算
+        remaining_height = current_y - self.margin
+        
+        # チェックリストに必要な高さを計算（12項目）
+        # 最小サイズで計算して確実に収める
+        font_size_pt = 7  # フォントサイズをさらに縮小
+        line_spacing = 0.5 * mm  # 行間をさらに縮小
+        font_height = font_size_pt * 0.352778 * 1.05  # pt to mm変換 * line-height (1.05に縮小)
+        checklist_required_height = 12 * (font_height + line_spacing) - line_spacing + 1.5 * mm  # 上下パディングを縮小
+        
+        # テーブルの高さは、残りの高さとチェックリストに必要な高さの大きい方を使用
+        # ただし、A4縦の高さ（297mm）を超えないようにする
+        min_table_height = max(checklist_required_height, 20 * mm)  # 最小高さをさらに縮小
+        table_height = min(min_table_height, remaining_height - 0.5 * mm)  # 0.5mmの余裕を残す
+        
+        # もしテーブル高さがチェックリストに必要な高さより小さい場合は、さらに縮小
+        if table_height < checklist_required_height:
+            # さらに縮小した設定で再計算
+            font_size_pt = 6
+            line_spacing = 0.4 * mm
+            font_height = font_size_pt * 0.352778 * 1.0
+            checklist_required_height = 12 * (font_height + line_spacing) - line_spacing + 1.5 * mm
+            min_table_height = max(checklist_required_height, 18 * mm)
+            table_height = min(min_table_height, remaining_height - 0.5 * mm)
+        
         countermeasure_table = Table(
             countermeasure_table_data,
             colWidths=[countermeasure_col_width, checklist_col_width],
-            rowHeights=[self.px_to_mm(350)]  # 350px高さ
+            rowHeights=[table_height]
         )
         
         countermeasure_style = TableStyle([
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),  # 線の太さを縮小
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-            ('ALIGN', (1, 0), (1, 0), 'LEFT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), self.px_to_mm(15)),  # padding: 15px
-            ('RIGHTPADDING', (0, 0), (-1, -1), self.px_to_mm(15)),
-            ('TOPPADDING', (0, 0), (-1, -1), self.px_to_mm(15)),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), self.px_to_mm(15)),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2 * mm),  # paddingをさらに縮小
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2 * mm),
+            ('TOPPADDING', (0, 0), (-1, -1), 2 * mm),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2 * mm),
         ])
         
         countermeasure_table.setStyle(countermeasure_style)
@@ -507,37 +469,27 @@ class HiyariHattoGenerator:
         countermeasure_table.drawOn(c, start_x, countermeasure_table_y)
         
         # チェックリストを手動で描画
-        # HTML: padding: 15px, font-size: 14px, margin-bottom: 8px
-        checklist_cell_x = start_x + countermeasure_col_width + self.px_to_mm(15)  # padding考慮
-        checklist_cell_y = countermeasure_table_y + countermeasure_h - self.px_to_mm(15)  # padding考慮（上から）
+        checklist_cell_x = start_x + countermeasure_col_width + 2 * mm  # padding考慮
+        checklist_cell_y = countermeasure_table_y + countermeasure_h - 2 * mm  # padding考慮（上から）
         
-        # 円のサイズ（16px）
-        circle_radius = self.px_to_mm(8)  # 16px / 2
+        # 円のサイズをさらに縮小
+        circle_radius = 1.0 * mm
         
-        # チェックリストのフォントサイズ（14px）
-        font_size_pt = 14
+        # チェックリストのフォントサイズは上で計算した値を使用
         c.setFont(self.font_reg, font_size_pt)
-        
-        # 行間（margin-bottom: 8px）
-        line_spacing = self.px_to_mm(8)
-        
-        # フォントの高さ（14px ≈ 3.7mm）
-        font_height = self.px_to_mm(14) * 1.4  # line-height考慮
         
         for i in range(1, 13):
             # 各項目のY位置を計算（上から下へ）
-            # 最初の項目は上から15px（padding）の位置
-            # 以降はフォント高さ + 行間ずつ下に
             item_y = checklist_cell_y - (i - 1) * (font_height + line_spacing)
             
-            # 番号を描画（右寄せ、幅25px）
+            # 番号を描画（右寄せ、幅をさらに縮小）
             num_text = str(i)
             num_width = c.stringWidth(num_text, self.font_reg, font_size_pt)
-            num_x = checklist_cell_x + self.px_to_mm(25) - num_width
+            num_x = checklist_cell_x + 4 * mm - num_width
             c.drawString(num_x, item_y, num_text)
             
-            # 円を描画（番号の後、margin-right: 5px）
-            circle_x = checklist_cell_x + self.px_to_mm(25) + self.px_to_mm(5) + circle_radius
+            # 円を描画（番号の後）
+            circle_x = checklist_cell_x + 4 * mm + 0.8 * mm + circle_radius
             circle_y = item_y + font_height * 0.5  # テキストのベースラインから円の中心まで
             
             if i in selected_indices:
@@ -547,11 +499,11 @@ class HiyariHattoGenerator:
             else:
                 # 選択されていない場合は輪郭のみ
                 c.setStrokeColor(colors.HexColor('#333333'))
-                c.setLineWidth(1)
+                c.setLineWidth(0.5)
                 c.circle(circle_x, circle_y, circle_radius, fill=0)
             
-            # テキストを描画（円の後、margin-right: 5px）
-            text_x = circle_x + circle_radius + self.px_to_mm(5)
+            # テキストを描画（円の後）
+            text_x = circle_x + circle_radius + 0.8 * mm
             c.setFillColor(colors.black)  # テキスト色をリセット
             c.drawString(text_x, item_y, self.cause_items[i])
 

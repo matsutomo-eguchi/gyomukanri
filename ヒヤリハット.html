@@ -5,220 +5,300 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ヒヤリハット報告書</title>
 <style>
+    /* ベース設定：明朝体で公的文書の雰囲気を出す */
     body {
         font-family: "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif;
-        background-color: #f4f4f4;
+        background-color: #525659; /* ブラウザ背景は暗くして用紙を際立たせる */
+        margin: 0;
         padding: 20px;
-        line-height: 1.4;
+        display: flex;
+        justify-content: center;
     }
-    .paper {
+
+    /* A4用紙設定 */
+    .sheet {
         background-color: white;
-        width: 210mm; /* A4 width */
+        width: 210mm;
         min-height: 297mm;
-        margin: 0 auto;
-        padding: 15mm;
-        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        padding: 20mm 15mm;
+        box-shadow: 0 0 15px rgba(0,0,0,0.3);
         box-sizing: border-box;
+        position: relative;
     }
+
+    /* タイトル */
     h1 {
         text-align: center;
         font-size: 24px;
-        margin-bottom: 30px;
-        letter-spacing: 2px;
-    }
-    .header-row {
-        text-align: right;
-        margin-bottom: 5px;
-    }
-    .input-line {
-        border-bottom: 1px solid black;
-        display: inline-block;
-        width: 150px;
-    }
-    
-    /* Tables */
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 20px;
-    }
-    th, td {
-        border: 1px solid #000;
-        padding: 5px;
-        vertical-align: top;
-    }
-    
-    /* Section Headers */
-    .section-title {
+        margin-bottom: 40px;
         font-weight: bold;
-        margin-top: 20px;
-        margin-bottom: 5px;
-        font-size: 16px;
+        letter-spacing: 2px;
+        color: #333;
     }
 
-    /* Inputs within tables */
-    input[type="text"], input[type="number"] {
+    /* 共通スタイル */
+    .input-line {
         border: none;
-        border-bottom: 1px dashed #ccc;
-        background: transparent;
-        font-family: inherit;
+        border-bottom: 1px solid #333;
         outline: none;
+        font-family: inherit;
+        font-size: inherit;
         text-align: center;
     }
     textarea {
         width: 100%;
         border: none;
         resize: none;
-        background: transparent;
-        font-family: inherit;
         outline: none;
-        min-height: 80px;
+        font-family: inherit;
+        font-size: 14px;
+        background: transparent;
+        line-height: 1.5;
+        height: 100%;
+        box-sizing: border-box;
     }
-
-    /* Specific Column Widths */
-    .col-label-narrow { width: 10%; text-align: center; vertical-align: middle; background-color: #fff; }
-    .col-where { width: 60%; }
-    .col-doing { width: 30%; }
-    
-    /* Checkbox List */
-    .checklist {
-        list-style: none;
-        padding: 0;
-        margin: 0;
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 0;
+        table-layout: fixed; /* 列幅固定 */
+    }
+    th, td {
+        border: 1px solid #333;
+        padding: 5px 8px;
+        vertical-align: middle;
         font-size: 14px;
     }
-    .checklist li {
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-    }
-    .checklist span.num {
-        display: inline-block;
-        width: 25px;
+
+    /* 記入者欄 */
+    .header-info {
         text-align: right;
-        margin-right: 5px;
-    }
-    .circle-target {
-        border: 1px solid #333;
-        border-radius: 50%;
-        width: 16px;
-        height: 16px;
-        display: inline-block;
-        margin-right: 5px;
-        vertical-align: middle;
-        cursor: pointer;
+        margin-bottom: 5px;
+        font-size: 14px;
     }
 
-    /* Arrow */
-    .arrow-container {
-        text-align: right;
-        padding-right: 12%; 
-        margin-top: -15px;
-        margin-bottom: 5px;
-        font-size: 30px;
+    /* セクションタイトル */
+    .section-header {
+        font-weight: bold;
+        margin-top: 25px;
+        margin-bottom: 3px;
+        font-size: 16px;
+    }
+
+    /* 概要テーブルの調整 */
+    .col-label {
+        width: 12%; /* 画像の「いつ」等の幅 */
+        text-align: center;
+        font-weight: bold;
+        line-height: 1.2;
+    }
+    .col-where-input {
+        width: 60%;
+        vertical-align: top;
+        height: 100px;
+    }
+    .col-doing-label {
+        width: 10%;
+        text-align: center;
+        vertical-align: middle;
+        line-height: 1.4;
+        font-weight: bold;
+        padding: 0 2px;
+    }
+    .col-doing-input {
+        vertical-align: top;
+    }
+
+    /* 原因テーブルの調整 */
+    .cause-header th {
+        font-weight: normal;
+        font-size: 12px;
+        text-align: left;
+        background-color: #fff;
+        height: 25px;
+        vertical-align: bottom;
+    }
+    .cause-body td {
+        height: 120px;
+        vertical-align: top;
+    }
+
+    /* 矢印エリア */
+    .arrow-area {
+        position: relative;
+        height: 30px;
+        margin-top: -5px; /* テーブルに近づける */
+    }
+    .arrow-down {
+        position: absolute;
+        right: 15%; /* 画像の位置に合わせる */
+        font-size: 32px;
+        background: white;
+        padding: 0 10px;
+        z-index: 10;
+        line-height: 1;
         color: #333;
     }
 
-    /* Print Styles */
+    /* 教訓・対策エリア */
+    .measures-container {
+        display: flex;
+        border: 1px solid #333;
+        height: 400px; /* 下部を大きく取る */
+    }
+    .measures-left {
+        width: 60%;
+        border-right: 1px solid #333;
+        padding: 10px;
+    }
+    .measures-right {
+        width: 40%;
+        padding: 10px 10px 10px 20px;
+        font-size: 13px;
+    }
+    .check-list {
+        list-style: none;
+        padding: 0;
+        margin: 10px 0 0 0;
+    }
+    .check-list li {
+        margin-bottom: 8px;
+        display: flex;
+        align-items: baseline;
+    }
+    .check-num {
+        display: inline-block;
+        width: 25px;
+        text-align: right;
+        margin-right: 8px;
+    }
+    /* カスタムチェックボックス（○印用） */
+    .circle-check {
+        appearance: none;
+        -webkit-appearance: none;
+        border: 1px solid #333;
+        width: 30px; /* 判定エリアを広く */
+        height: 18px;
+        border-radius: 0;
+        display: none; /* 実際のチェックボックスは隠すか、ラベルで代用 */
+    }
+    .check-label {
+        cursor: pointer;
+    }
+    .check-label:hover {
+        text-decoration: underline;
+    }
+    /* 選択時の視覚表現（○で囲むようなCSS実装も可能だが、今回はシンプルに太字化） */
+    input[type="checkbox"]:checked + label {
+        font-weight: bold;
+        color: #d00;
+    }
+    input[type="checkbox"]:checked + label::before {
+        content: "⭕ ";
+    }
+
+    /* 印刷用設定 */
     @media print {
         body { background: none; padding: 0; }
-        .paper { width: 100%; box-shadow: none; margin: 0; padding: 0; }
-        textarea { border-bottom: none; }
+        .sheet { width: 100%; box-shadow: none; margin: 0; padding: 0; height: auto; }
+        .input-line { border-bottom: none; } /* 印刷時は下線を消すか残すか選択可能 */
+        /* 書き込み用ならborder残し、入力済み印刷ならborder消し */
     }
 </style>
 </head>
 <body>
 
-<div class="paper">
+<div class="sheet">
     <h1>ヒヤリハット報告書</h1>
 
-    <div class="header-row">
-        記入者 <input type="text" style="width: 150px; border-bottom: 1px solid black;">
+    <div class="header-info">
+        記入者 <input type="text" class="input-line" style="width: 180px;">
     </div>
 
-    <div class="section-title">【概要】</div>
+    <div class="section-header">【概要】</div>
     <table>
         <tr>
-            <td class="col-label-narrow" style="letter-spacing: 0.5em;">いつ</td>
-            <td colspan="2">
-                令和 <input type="number" style="width:30px"> 年 
-                <input type="number" style="width:30px"> 月 
-                <input type="number" style="width:30px"> 日 
-                ( <input type="text" style="width:30px"> 曜日) 
-                &nbsp;&nbsp;&nbsp;&nbsp;
-                <select style="border:none; font-family:inherit;"><option>午前</option><option>午後</option></select>
-                <input type="number" style="width:30px"> 時 
-                <input type="number" style="width:30px"> 分頃
+            <td class="col-label">い　つ</td>
+            <td colspan="3">
+                令和 <input type="number" class="input-line" style="width:30px"> 年 
+                <input type="number" class="input-line" style="width:30px"> 月 
+                <input type="number" class="input-line" style="width:30px"> 日 
+                ( <input type="text" class="input-line" style="width:40px"> 曜日) &nbsp;&nbsp;
+                <select style="border:none; font-family:inherit; font-size:inherit; -webkit-appearance: none; border-bottom:1px solid #333;">
+                    <option>午前</option>
+                    <option>午後</option>
+                </select>
+                <input type="number" class="input-line" style="width:30px"> 時 
+                <input type="number" class="input-line" style="width:30px"> 分頃
             </td>
         </tr>
         <tr>
-            <td class="col-label-narrow" style="text-align:left; vertical-align:top;">
-                <br>どこで
+            <td class="col-label">ど こ で</td>
+            <td class="col-where-input">
+                <textarea placeholder="（場所の詳細を記入）"></textarea>
             </td>
-            <td class="col-where">
-                <textarea style="height: 100px;"></textarea>
+            <td class="col-doing-label">
+                ど う し て<br>い た 時
             </td>
-            <td class="col-doing" style="vertical-align: top;">
-                <strong>どうして<br>い た 時</strong>
-                <textarea style="height: 80px; margin-top:5px;"></textarea>
+            <td class="col-doing-input">
+                <textarea placeholder="（作業内容や状況を記入）"></textarea>
             </td>
         </tr>
         <tr>
-            <td class="col-label-narrow" style="text-align:left;">
-                ヒヤリとした<br>時のあらまし
-            </td>
-            <td colspan="2">
-                <textarea style="height: 120px;"></textarea>
+            <td class="col-label" style="font-size: 13px;">ヒヤリとした<br>時のあらまし</td>
+            <td colspan="3" style="height: 100px;">
+                <textarea placeholder="（具体的な事象を記入）"></textarea>
             </td>
         </tr>
     </table>
 
-    <div class="section-title">【原因】</div>
-    <table>
-        <tr style="background-color: #f9f9f9; font-size: 14px;">
-            <th style="font-weight:normal;">環境に問題があった</th>
-            <th style="font-weight:normal;">設備・機器等に問題があった</th>
-            <th style="font-weight:normal;">指導方法に問題があった</th>
-            <th style="font-weight:normal;">自分自身に問題があった</th>
+    <div class="section-header">【原因】</div>
+    <table style="border-top: none;">
+        <tr class="cause-header">
+            <th>環境に問題があった</th>
+            <th>設備・機器等に問題があった</th>
+            <th>指導方法に問題があった</th>
+            <th>自分自身に問題があった</th>
         </tr>
-        <tr>
-            <td style="height: 100px;"><textarea></textarea></td>
+        <tr class="cause-body">
+            <td><textarea></textarea></td>
             <td><textarea></textarea></td>
             <td><textarea></textarea></td>
             <td><textarea></textarea></td>
         </tr>
     </table>
 
-    <div class="arrow-container">⇩</div>
+    <div class="arrow-area">
+        <div class="arrow-down">⇩</div>
+    </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-        <div class="section-title">【教訓・対策】</div>
-        <div style="font-size: 14px; margin-bottom: 5px;">該当する事項に○をつける</div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 5px;">
+        <div class="section-header">【教訓・対策】</div>
+        <div style="font-size: 14px; margin-bottom: 2px;">該当する事項に○をつける</div>
     </div>
     
-    <table>
-        <tr>
-            <td style="width: 60%; vertical-align: top; height: 350px;">
-                <textarea style="height: 100%;"></textarea>
-            </td>
-            <td style="vertical-align: top; padding: 15px;">
-                <ul class="checklist">
-                    <li><span class="num">1</span> <div class="circle-target"></div> よく見え(聞こえ)なかった</li>
-                    <li><span class="num">2</span> <div class="circle-target"></div> 気が付かなかった</li>
-                    <li><span class="num">3</span> <div class="circle-target"></div> 忘れていた</li>
-                    <li><span class="num">4</span> <div class="circle-target"></div> 知らなかった</li>
-                    <li><span class="num">5</span> <div class="circle-target"></div> 深く考えなかった</li>
-                    <li><span class="num">6</span> <div class="circle-target"></div> 大丈夫だと思った</li>
-                    <li><span class="num">7</span> <div class="circle-target"></div> あわてていた</li>
-                    <li><span class="num">8</span> <div class="circle-target"></div> 不愉快なことがあった</li>
-                    <li><span class="num">9</span> <div class="circle-target"></div> 疲れていた</li>
-                    <li><span class="num">10</span> <div class="circle-target"></div> 無意識に手が動いた</li>
-                    <li><span class="num">11</span> <div class="circle-target"></div> やりにくかった</li>
-                    <li><span class="num">12</span> <div class="circle-target"></div> 体のバランスを崩した</li>
-                </ul>
-            </td>
-        </tr>
-    </table>
+    <div class="measures-container">
+        <div class="measures-left">
+            <textarea style="height: 100%;" placeholder="（今後の対策や教訓を記入）"></textarea>
+        </div>
+        
+        <div class="measures-right">
+            <ul class="check-list">
+                <li><span class="check-num">1</span> <input type="checkbox" id="c1"><label for="c1" class="check-label">よく見え(聞こえ)なかった</label></li>
+                <li><span class="check-num">2</span> <input type="checkbox" id="c2"><label for="c2" class="check-label">気が付かなかった</label></li>
+                <li><span class="check-num">3</span> <input type="checkbox" id="c3"><label for="c3" class="check-label">忘れていた</label></li>
+                <li><span class="check-num">4</span> <input type="checkbox" id="c4"><label for="c4" class="check-label">知らなかった</label></li>
+                <li><span class="check-num">5</span> <input type="checkbox" id="c5"><label for="c5" class="check-label">深く考えなかった</label></li>
+                <li><span class="check-num">6</span> <input type="checkbox" id="c6"><label for="c6" class="check-label">大丈夫だと思った</label></li>
+                <li><span class="check-num">7</span> <input type="checkbox" id="c7"><label for="c7" class="check-label">あわてていた</label></li>
+                <li><span class="check-num">8</span> <input type="checkbox" id="c8"><label for="c8" class="check-label">不愉快なことがあった</label></li>
+                <li><span class="check-num">9</span> <input type="checkbox" id="c9"><label for="c9" class="check-label">疲れていた</label></li>
+                <li><span class="check-num">10</span> <input type="checkbox" id="c10"><label for="c10" class="check-label">無意識に手が動いた</label></li>
+                <li><span class="check-num">11</span> <input type="checkbox" id="c11"><label for="c11" class="check-label">やりにくかった</label></li>
+                <li><span class="check-num">12</span> <input type="checkbox" id="c12"><label for="c12" class="check-label">体のバランスを崩した</label></li>
+            </ul>
+        </div>
+    </div>
 </div>
 
 </body>

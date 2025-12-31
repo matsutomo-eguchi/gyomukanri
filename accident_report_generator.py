@@ -106,6 +106,30 @@ class AccidentReportGenerator:
         # スタイルシートの準備
         self.styles = getSampleStyleSheet()
         self.setup_custom_styles()
+        
+        # 原因チェックリスト
+        self.cause_items = {
+            1: "よく見え(聞こえ)なかった",
+            2: "気が付かなかった",
+            3: "忘れていた",
+            4: "知らなかった",
+            5: "深く考えなかった",
+            6: "大丈夫だと思った",
+            7: "あわてていた",
+            8: "不愉快なことがあった",
+            9: "疲れていた",
+            10: "無意識に手が動いた",
+            11: "やりにくかった",
+            12: "体のバランスを崩した"
+        }
+        
+        # 分類
+        self.categories = [
+            "環境に問題があった",
+            "設備・機器等に問題があった",
+            "指導方法に問題があった",
+            "自分自身に問題があった"
+        ]
     
     def setup_custom_styles(self):
         """カスタムスタイルの設定"""
@@ -200,6 +224,18 @@ class AccidentReportGenerator:
         
         canvas_obj.restoreState()
     
+    def px_to_mm(self, px_value):
+        """
+        px値をmm値に変換
+        
+        Args:
+            px_value: px値
+            
+        Returns:
+            mm値（ReportLabの単位）
+        """
+        return px_value * 0.264583 * mm
+    
     def draw_underline(self, canvas_obj, x, y, width, line_width=0.5):
         """
         下線を描画（入力欄用）
@@ -229,6 +265,9 @@ class AccidentReportGenerator:
                 - situation: 事故発生の状況と経過（統合）
                 - process: 経過（situationに統合される可能性あり）
                 - cause: 事故原因
+                - cause_indices: 原因チェックリストの選択項目（1-12のリスト）
+                - category_index: 分類のインデックス（0-3）
+                - category: 分類のテキスト
                 - countermeasure: 対策
                 - others: その他
                 - reporter_name: 報告者氏名
@@ -498,6 +537,48 @@ class AccidentReportGenerator:
             "その他"
         ]
         
+        # 本文テーブルの列幅（ラベルカラム: 適切な幅、内容カラム: 残り）
+        # A4に収まるように調整
+        label_col_width = 35 * mm  # 横書きラベル用の幅
+        body_col_width = content_width - label_col_width - 1.0 * 2  # 内容（境界線分を引く）
+        
+        # 事故原因セクションの準備（原因チェックリストと分類を含む）
+        cause_text = data.get("cause", "")
+        selected_cause_indices = data.get("cause_indices", [])
+        category_index = data.get("category_index", -1)
+        category_text = data.get("category", "")
+        
+        # 原因テキストと分類を組み合わせ
+        cause_content_parts = []
+        if cause_text:
+            cause_content_parts.append(cause_text)
+        if category_text and category_index >= 0:
+            cause_content_parts.append(f"\n\n【分類】\n{category_text}")
+        cause_content = "\n".join(cause_content_parts) if cause_content_parts else ""
+        
+        # 原因セクション用のテーブル（左列: 原因テキスト、右列: チェックリスト用の空セル）
+        cause_text_width = body_col_width * 0.60  # 左60%
+        cause_checklist_width = body_col_width * 0.40  # 右40%
+        
+        # 原因セクションの内部テーブル（左: 原因テキスト、右: 空セル（後で手動描画））
+        cause_inner_table_data = [
+            [Paragraph(cause_content, self.para_style), ""]  # 右列は空、後で手動描画
+        ]
+        cause_inner_table = Table(
+            cause_inner_table_data,
+            colWidths=[cause_text_width, cause_checklist_width],
+            rowHeights=[None]
+        )
+        cause_inner_table_style = TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ])
+        cause_inner_table.setStyle(cause_inner_table_style)
+        
         body_table_data = [
             [
                 Paragraph(horizontal_labels[0], self.body_label_style),
@@ -505,7 +586,7 @@ class AccidentReportGenerator:
             ],
             [
                 Paragraph(horizontal_labels[1], self.body_label_style),
-                Paragraph(data.get("cause", ""), self.para_style)
+                cause_inner_table
             ],
             [
                 Paragraph(horizontal_labels[2], self.body_label_style),
@@ -517,12 +598,9 @@ class AccidentReportGenerator:
             ]
         ]
         
-        # 本文テーブルの列幅（ラベルカラム: 適切な幅、内容カラム: 残り）
-        # A4に収まるように調整
-        label_col_width = 35 * mm  # 横書きラベル用の幅
         body_col_widths = [
             label_col_width,  # 横書きカテゴリ
-            content_width - label_col_width - 1.0 * 2,  # 内容（境界線分を引く）
+            body_col_width,  # 内容
         ]
         
         # 行の高さをA4に収まるように調整（HTMLの比率を維持しつつ縮小）
@@ -565,7 +643,65 @@ class AccidentReportGenerator:
         
         body_table.setStyle(body_table_style)
         body_w, body_h = body_table.wrapOn(c, content_width, content_height)
-        body_table.drawOn(c, start_x, current_y - body_h)
+        body_table_y = current_y - body_h
+        body_table.drawOn(c, start_x, body_table_y)
+        
+        # 原因セクションの右側にチェックリストを手動描画
+        if selected_cause_indices:
+            # 原因セクションの行の位置を計算（2行目）
+            cause_row_y_top = body_table_y + body_h - body_row_heights[0] - body_row_heights[1]
+            cause_row_y_bottom = body_table_y + body_h - body_row_heights[0]
+            
+            # チェックリストの描画位置を計算
+            checklist_cell_x = start_x + label_col_width + cause_text_width + 6  # パディング6pt
+            checklist_cell_y = cause_row_y_bottom - 6  # パディング6pt
+            
+            # フォントサイズと行間
+            font_size_pt = 11
+            line_spacing = 2 * mm
+            circle_radius = 2 * mm
+            
+            # フォントの高さ
+            c.setFont(self.font_reg, font_size_pt)
+            font_height = font_size_pt * 1.4
+            
+            # 「該当する事項に○をつける」の説明文を描画
+            instruction_text = "該当する事項に○をつける"
+            c.setFont(self.font_reg, 10)
+            instruction_y = checklist_cell_y - 3 * mm
+            c.drawString(checklist_cell_x, instruction_y, instruction_text)
+            instruction_y -= font_height + line_spacing
+            
+            # 各チェックリスト項目を描画
+            c.setFont(self.font_reg, font_size_pt)
+            for i in range(1, 13):
+                item_y = instruction_y - (i - 1) * (font_height + line_spacing)
+                
+                # 番号を描画（右寄せ、幅25px）
+                num_text = str(i)
+                num_width = c.stringWidth(num_text, self.font_reg, font_size_pt)
+                num_x = checklist_cell_x + self.px_to_mm(25) - num_width
+                c.drawString(num_x, item_y, num_text)
+                
+                # 円を描画（番号の後、margin-right: 5px）
+                circle_x = checklist_cell_x + self.px_to_mm(25) + self.px_to_mm(5) + circle_radius
+                circle_y = item_y + font_height * 0.5
+                
+                if i in selected_cause_indices:
+                    # 選択されている場合は塗りつぶし
+                    c.setFillColor(colors.black)
+                    c.circle(circle_x, circle_y, circle_radius, fill=1)
+                else:
+                    # 選択されていない場合は輪郭のみ
+                    c.setStrokeColor(colors.HexColor('#333333'))
+                    c.setLineWidth(1)
+                    c.circle(circle_x, circle_y, circle_radius, fill=0)
+                
+                # テキストを描画（円の後、margin-right: 5px）
+                text_x = circle_x + circle_radius + self.px_to_mm(5)
+                c.setFillColor(colors.black)
+                c.drawString(text_x, item_y, self.cause_items[i])
+        
         current_y -= body_h + 3 * mm
         
         # ===== フッター =====
