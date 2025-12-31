@@ -314,6 +314,22 @@ class DataManager:
         """全利用者情報を取得"""
         return self._load_master()
     
+    def get_user_by_name(self, name: str) -> Optional[Dict]:
+        """
+        利用者名から利用者情報を取得
+        
+        Args:
+            name: 利用者名
+            
+        Returns:
+            利用者情報の辞書、見つからない場合はNone
+        """
+        users = self._load_master()
+        for user in users:
+            if user["name"] == name and user.get("active", True):
+                return user
+        return None
+    
     def add_user(self, name: str, classification: str = "放課後等デイサービス") -> bool:
         """
         新しい利用者を追加
@@ -498,6 +514,14 @@ class DataManager:
             lines.append(f"- **終業時間**: {report_data['終業時間']}")
         if "担当利用者名" in report_data:
             lines.append(f"- **担当利用者名**: {report_data['担当利用者名']}")
+        if "利用者区分" in report_data and report_data["利用者区分"]:
+            classification_display = report_data["利用者区分"]
+            # 区分の表示名を設定（放デイ/児発の略称付き）
+            if classification_display == "放課後等デイサービス":
+                classification_display = "放課後等デイサービス（放デイ）"
+            elif classification_display == "児童発達支援":
+                classification_display = "児童発達支援（児発）"
+            lines.append(f"- **利用者区分**: {classification_display}")
         if "created_at" in report_data:
             created_at = report_data['created_at']
             if isinstance(created_at, str):

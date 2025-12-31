@@ -590,6 +590,35 @@ def render_daily_report_form():
                 help="連絡帳を作成する児童を選択してください"
             )
             
+            # 利用者区分選択
+            if child_name:
+                # 選択された利用者の情報を取得
+                user_info = st.session_state.data_manager.get_user_by_name(child_name)
+                default_classification = user_info.get("classification", "放課後等デイサービス") if user_info else "放課後等デイサービス"
+                
+                # 区分の表示名を設定（放デイ/児発の略称付き）
+                classification_options = {
+                    "放課後等デイサービス": "放課後等デイサービス（放デイ）",
+                    "児童発達支援": "児童発達支援（児発）"
+                }
+                
+                # デフォルト値の表示名を取得
+                default_display = classification_options.get(default_classification, "放課後等デイサービス（放デイ）")
+                
+                # 区分選択
+                selected_classification_display = st.selectbox(
+                    "利用者区分 *",
+                    options=list(classification_options.values()),
+                    index=list(classification_options.values()).index(default_display) if default_display in classification_options.values() else 0,
+                    key=f"classification_{tab_idx}",
+                    help="放課後等デイサービス（放デイ）または児童発達支援（児発）を選択してください"
+                )
+                
+                # 表示名から実際の区分値を取得
+                selected_classification = [k for k, v in classification_options.items() if v == selected_classification_display][0]
+            else:
+                selected_classification = None
+            
             if child_name:  # 児童が選択されている場合のみフォームを表示
                     col1, col2 = st.columns(2)
                     
@@ -834,6 +863,8 @@ def render_daily_report_form():
                             errors = []
                             if not child_name:
                                 errors.append("担当利用者名を選択してください")
+                            if child_name and not selected_classification:
+                                errors.append("利用者区分を選択してください")
                             if not learning_tags and not learning_detail:
                                 errors.append("学習内容を入力してください")
                             if not free_play_tags and not free_play_detail:
@@ -854,6 +885,7 @@ def render_daily_report_form():
                                     "始業時間": st.session_state.start_time.strftime("%H:%M"),
                                     "終業時間": st.session_state.end_time.strftime("%H:%M"),
                                     "担当利用者名": child_name,
+                                    "利用者区分": selected_classification,
                                     "体温": temperature,
                                     "バイタルその他": vital_other,
                                     "気分顔色": mood,
