@@ -1134,45 +1134,43 @@ def render_daily_report_form():
             
             # 発生日時
             st.markdown("**発生日時 ***")
-            col_date1, col_date2, col_date3, col_date4 = st.columns(4)
-            with col_date1:
-                # 現在の日付を取得してデフォルト値に設定
-                now = datetime.now()
-                incident_year = st.number_input(
-                    "年",
-                    min_value=2019,
-                    max_value=2100,
-                    value=st.session_state.get("incident_year", now.year),
-                    key="incident_year",
-                    help="発生日の年（西暦）"
-                )
-            with col_date2:
-                incident_month = st.number_input(
-                    "月",
-                    min_value=1,
-                    max_value=12,
-                    value=st.session_state.get("incident_month", now.month),
-                    key="incident_month",
-                    help="発生日の月"
-                )
-            with col_date3:
-                incident_day = st.number_input(
-                    "日",
-                    min_value=1,
-                    max_value=31,
-                    value=st.session_state.get("incident_day", now.day),
-                    key="incident_day",
-                    help="発生日の日"
-                )
-            with col_date4:
-                # 曜日を自動計算して表示
+            
+            # 現在の日付を取得してデフォルト値に設定
+            now = datetime.now()
+            
+            # セッション状態から日付を取得、またはデフォルト値を使用
+            default_date = st.session_state.get("incident_date", date(now.year, now.month, now.day))
+            if isinstance(default_date, str):
                 try:
-                    date_obj = datetime(incident_year, incident_month, incident_day)
-                    weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
-                    weekday_name = weekday_map[date_obj.weekday()]
-                    st.markdown(f"<br><strong>（{weekday_name}曜日）</strong>", unsafe_allow_html=True)
-                except ValueError:
-                    st.markdown("<br><strong>（-）</strong>", unsafe_allow_html=True)
+                    default_date = datetime.strptime(default_date, "%Y-%m-%d").date()
+                except:
+                    default_date = date(now.year, now.month, now.day)
+            elif not isinstance(default_date, date):
+                default_date = date(now.year, now.month, now.day)
+            
+            # カレンダーで日付を選択
+            col_date1, col_date2 = st.columns([2, 1])
+            with col_date1:
+                incident_date = st.date_input(
+                    "発生日",
+                    value=default_date,
+                    min_value=date(2019, 1, 1),
+                    max_value=date(2100, 12, 31),
+                    key="incident_date",
+                    help="カレンダーから発生日を選択してください"
+                )
+                # セッション状態に保存
+                st.session_state["incident_date"] = incident_date
+                # 年・月・日を個別にセッション状態に保存（後方互換性のため）
+                st.session_state["incident_year"] = incident_date.year
+                st.session_state["incident_month"] = incident_date.month
+                st.session_state["incident_day"] = incident_date.day
+            
+            with col_date2:
+                # 曜日を自動計算して表示
+                weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
+                weekday_name = weekday_map[incident_date.weekday()]
+                st.markdown(f"<br><br><strong>（{weekday_name}曜日）</strong>", unsafe_allow_html=True)
             
             # 発生時刻
             col_time1, col_time2, col_time3 = st.columns(3)
@@ -1252,45 +1250,43 @@ def render_daily_report_form():
             
             # 発生日時
             st.markdown("**発生日時 ***")
-            col_date1, col_date2, col_date3, col_date4 = st.columns(4)
-            with col_date1:
-                # 現在の日付を取得してデフォルト値に設定
-                now = datetime.now()
-                hiyari_year = st.number_input(
-                    "年",
-                    min_value=2019,
-                    max_value=2100,
-                    value=st.session_state.get("hiyari_year", now.year),
-                    key="hiyari_year",
-                    help="発生日の年（西暦）"
-                )
-            with col_date2:
-                hiyari_month = st.number_input(
-                    "月",
-                    min_value=1,
-                    max_value=12,
-                    value=st.session_state.get("hiyari_month", now.month),
-                    key="hiyari_month",
-                    help="発生日の月"
-                )
-            with col_date3:
-                hiyari_day = st.number_input(
-                    "日",
-                    min_value=1,
-                    max_value=31,
-                    value=st.session_state.get("hiyari_day", now.day),
-                    key="hiyari_day",
-                    help="発生日の日"
-                )
-            with col_date4:
-                # 曜日を自動計算して表示
+            
+            # 現在の日付を取得してデフォルト値に設定
+            now = datetime.now()
+            
+            # セッション状態から日付を取得、またはデフォルト値を使用
+            default_date = st.session_state.get("hiyari_date", date(now.year, now.month, now.day))
+            if isinstance(default_date, str):
                 try:
-                    date_obj = datetime(hiyari_year, hiyari_month, hiyari_day)
-                    weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
-                    weekday_name = weekday_map[date_obj.weekday()]
-                    st.markdown(f"<br><strong>（{weekday_name}曜日）</strong>", unsafe_allow_html=True)
-                except ValueError:
-                    st.markdown("<br><strong>（-）</strong>", unsafe_allow_html=True)
+                    default_date = datetime.strptime(default_date, "%Y-%m-%d").date()
+                except:
+                    default_date = date(now.year, now.month, now.day)
+            elif not isinstance(default_date, date):
+                default_date = date(now.year, now.month, now.day)
+            
+            # カレンダーで日付を選択
+            col_date1, col_date2 = st.columns([2, 1])
+            with col_date1:
+                hiyari_date = st.date_input(
+                    "発生日",
+                    value=default_date,
+                    min_value=date(2019, 1, 1),
+                    max_value=date(2100, 12, 31),
+                    key="hiyari_date",
+                    help="カレンダーから発生日を選択してください"
+                )
+                # セッション状態に保存
+                st.session_state["hiyari_date"] = hiyari_date
+                # 年・月・日を個別にセッション状態に保存（後方互換性のため）
+                st.session_state["hiyari_year"] = hiyari_date.year
+                st.session_state["hiyari_month"] = hiyari_date.month
+                st.session_state["hiyari_day"] = hiyari_date.day
+            
+            with col_date2:
+                # 曜日を自動計算して表示
+                weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
+                weekday_name = weekday_map[hiyari_date.weekday()]
+                st.markdown(f"<br><br><strong>（{weekday_name}曜日）</strong>", unsafe_allow_html=True)
             
             # 発生時刻
             col_time1, col_time2, col_time3 = st.columns(3)
@@ -1794,9 +1790,20 @@ def render_daily_report_form():
                 
                 # 発生日時の取得
                 now = datetime.now()
-                incident_year = st.session_state.get("incident_year", now.year)
-                incident_month = st.session_state.get("incident_month", now.month)
-                incident_day = st.session_state.get("incident_day", now.day)
+                
+                # カレンダーから選択した日付を取得
+                incident_date_selected = st.session_state.get("incident_date", date(now.year, now.month, now.day))
+                if isinstance(incident_date_selected, str):
+                    try:
+                        incident_date_selected = datetime.strptime(incident_date_selected, "%Y-%m-%d").date()
+                    except:
+                        incident_date_selected = date(now.year, now.month, now.day)
+                elif not isinstance(incident_date_selected, date):
+                    incident_date_selected = date(now.year, now.month, now.day)
+                
+                incident_year = incident_date_selected.year
+                incident_month = incident_date_selected.month
+                incident_day = incident_date_selected.day
                 incident_am_pm = st.session_state.get("incident_am_pm", "午前")
                 incident_time_hour_input = st.session_state.get("incident_time_hour", now.hour % 12 if now.hour % 12 != 0 else 12)
                 incident_time_min = st.session_state.get("incident_time_min", now.minute)
@@ -1915,11 +1922,12 @@ def render_daily_report_form():
                     st.info("💡 **ヒント:** フォーム外の「📋 事故報告詳細」セクションで基本情報（発生場所、対象者、原因チェックリスト、分類）を入力し、フォーム内で詳細情報を入力してください。")
                 else:
                     try:
-                        # 日付情報の準備（新しく追加した基本情報から取得）
+                        # 日付情報の準備（カレンダーから選択した日付を使用）
                         try:
-                            incident_date = datetime(incident_year, incident_month, incident_day)
-                            date_info = AccidentReportGenerator.format_date_for_report(incident_date.date())
-                        except ValueError:
+                            incident_date_obj = datetime.combine(incident_date_selected, time(incident_time_hour, incident_time_min))
+                            date_info = AccidentReportGenerator.format_date_for_report(incident_date_selected)
+                            incident_date = incident_date_obj
+                        except (ValueError, AttributeError):
                             # 無効な日付の場合は現在の日付を使用
                             work_date = st.session_state.work_date
                             date_info = AccidentReportGenerator.format_date_for_report(work_date)
@@ -2115,9 +2123,20 @@ def render_daily_report_form():
                 else:
                     try:
                         # 日時情報の準備（新しく追加した基本情報から取得）
-                        hiyari_year = st.session_state.get("hiyari_year", datetime.now().year)
-                        hiyari_month = st.session_state.get("hiyari_month", datetime.now().month)
-                        hiyari_day = st.session_state.get("hiyari_day", datetime.now().day)
+                        # カレンダーから選択した日付を取得
+                        now = datetime.now()
+                        hiyari_date_selected = st.session_state.get("hiyari_date", date(now.year, now.month, now.day))
+                        if isinstance(hiyari_date_selected, str):
+                            try:
+                                hiyari_date_selected = datetime.strptime(hiyari_date_selected, "%Y-%m-%d").date()
+                            except:
+                                hiyari_date_selected = date(now.year, now.month, now.day)
+                        elif not isinstance(hiyari_date_selected, date):
+                            hiyari_date_selected = date(now.year, now.month, now.day)
+                        
+                        hiyari_year = hiyari_date_selected.year
+                        hiyari_month = hiyari_date_selected.month
+                        hiyari_day = hiyari_date_selected.day
                         hiyari_am_pm = st.session_state.get("hiyari_am_pm", "午前")
                         hiyari_hour = st.session_state.get("hiyari_hour", 9)
                         hiyari_minute = st.session_state.get("hiyari_minute", 0)
