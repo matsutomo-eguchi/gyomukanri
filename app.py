@@ -1189,6 +1189,8 @@ def render_daily_report_form():
             render_hiyari_ai_assistant("hiyari_details", "details")
             render_hiyari_ai_assistant("hiyari_countermeasure", "countermeasure")
     
+    # フォームはここから開始（フォーム外のAIアシストの後）
+    
     with st.form("report_form"):
         # フォーム内の入力フィールド（セッション状態から取得）
         form_incident_toggle = st.session_state.get("incident_toggle", False)
