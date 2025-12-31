@@ -333,25 +333,6 @@ def render_sidebar():
         
         st.markdown("---")
         
-        # 1日の利用者数合計を表示
-        try:
-            daily_user_count = st.session_state.data_manager.get_daily_user_count(
-                work_date.isoformat()
-            )
-        except Exception as e:
-            # エラーが発生した場合は0を返す
-            daily_user_count = 0
-            # デバッグ用（必要に応じてコメントアウト）
-            # st.error(f"利用者数取得エラー: {str(e)}")
-        
-        # 常に表示（データがない場合は0名）
-        st.metric(
-            label="📊 本日の利用者数",
-            value=f"{daily_user_count}名"
-        )
-        
-        st.markdown("---")
-        
         # 簡易利用者記録機能
         st.subheader("👥 利用者記録")
         
