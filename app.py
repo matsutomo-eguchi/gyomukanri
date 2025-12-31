@@ -2166,12 +2166,28 @@ def render_morning_meeting():
                         "その他メモ": notes if notes else ""
                     }
                     
-                    # タイトルが生成されていない場合は、議題・内容からタイトルを生成
+                    # タイトルが生成されていない場合は、議題・内容からタイトルを生成（必ず「の件」形式）
                     if "タイトル" not in meeting_data or not meeting_data.get("タイトル"):
                         if agenda and agenda.strip():
                             title_success, title = st.session_state.ai_helper.generate_title_from_text(agenda)
-                            if title_success:
+                            if title_success and title:
+                                # 最終確認: 必ず「の件」で終わることを確認
+                                if not title.endswith("の件"):
+                                    title = title + "の件"
                                 meeting_data["タイトル"] = title
+                            else:
+                                # フォールバック: 簡易的にタイトルを生成
+                                agenda_text = agenda[:18]
+                                for delimiter in ['。', '、', '\n', '.', ',', '：', ':', '・']:
+                                    if delimiter in agenda_text:
+                                        agenda_text = agenda_text.split(delimiter)[0]
+                                        break
+                                meeting_data["タイトル"] = agenda_text + "の件"
+                    else:
+                        # 既存のタイトルも「の件」形式であることを確認
+                        existing_title = meeting_data.get("タイトル", "")
+                        if existing_title and not existing_title.endswith("の件"):
+                            meeting_data["タイトル"] = existing_title + "の件"
                     
                     if st.session_state.data_manager.save_morning_meeting(meeting_data):
                         st.success("✅ 朝礼議事録を保存しました！")
