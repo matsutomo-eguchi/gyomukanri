@@ -1309,6 +1309,12 @@ def render_daily_report_form():
             form_report_type = st.session_state.get("report_type", "事故報告書（PDF）")
             
             if form_incident_toggle and form_report_type == "事故報告書（PDF）":
+                # セッション状態から値を取得
+                incident_location = st.session_state.get("incident_location", "")
+                incident_subject = st.session_state.get("incident_subject", "")
+                incident_time_hour = st.session_state.get("incident_time_hour", datetime.now().hour)
+                incident_time_min = st.session_state.get("incident_time_min", datetime.now().minute)
+                
                 # バリデーション
                 errors = []
                 if not incident_location:
@@ -1356,36 +1362,24 @@ def render_daily_report_form():
                             "record_date_day": date_info.get("record_date_day", date_info["date_day"])
                         }
                         
-                        # 一時ファイルにPDFを生成
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                            pdf_filename = tmp_file.name
-                            generator = AccidentReportGenerator(pdf_filename)
-                            generator.generate(pdf_data)
-                            
-                            # PDFファイルを読み込んでダウンロードボタンを表示
-                            with open(pdf_filename, "rb") as pdf_file:
-                                pdf_bytes = pdf_file.read()
-                                st.download_button(
-                                    label="📥 事故報告書PDFをダウンロード",
-                                    data=pdf_bytes,
-                                    file_name=f"事故報告書_{work_date.strftime('%Y%m%d')}_{incident_subject}.pdf",
-                                    mime="application/pdf",
-                                    use_container_width=True
-                                )
-                            
-                            # 一時ファイルを削除
-                            os.unlink(pdf_filename)
-                            
-                            st.success("✅ PDF報告書を生成しました！")
+                        # PDF生成用のデータをセッション状態に保存（フォーム外で処理）
+                        st.session_state["pdf_generate_data"] = {
+                            "type": "accident",
+                            "pdf_data": pdf_data,
+                            "file_name": f"事故報告書_{work_date.strftime('%Y%m%d')}_{incident_subject}.pdf"
+                        }
+                        st.success("✅ PDF報告書を生成しました！")
                             
                     except Exception as e:
                         st.error(f"PDF生成エラー: {str(e)}")
                         st.exception(e)
             
             elif form_incident_toggle and form_report_type == "ヒヤリハット報告書（PDF）":
-                # バリデーション
-                errors = []
+                # セッション状態から値を取得
                 hiyari_location = st.session_state.get("hiyari_location", "")
+                hiyari_context = st.session_state.get("hiyari_context", "")
+                hiyari_details = st.session_state.get("hiyari_details", "")
+                hiyari_countermeasure = st.session_state.get("hiyari_countermeasure", "")
                 hiyari_time_hour = st.session_state.get("hiyari_time_hour", datetime.now().hour)
                 hiyari_time_min = st.session_state.get("hiyari_time_min", datetime.now().minute)
                 selected_causes = []
@@ -1401,6 +1395,8 @@ def render_daily_report_form():
                 selected_category = st.session_state.get("hiyari_category", "")
                 category_index = category_options.index(selected_category) if selected_category in category_options else -1
                 
+                # バリデーション
+                errors = []
                 if not hiyari_location:
                     errors.append("発生場所を入力してください")
                 if not hiyari_context:
@@ -1437,34 +1433,79 @@ def render_daily_report_form():
                             "countermeasure": hiyari_countermeasure
                         }
                         
-                        # 一時ファイルにPDFを生成
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                            pdf_filename = tmp_file.name
-                            generator = HiyariHattoGenerator(pdf_filename)
-                            generator.generate_report(
-                                pdf_data,
-                                reporter_name=st.session_state.staff_name
-                            )
-                            
-                            # PDFファイルを読み込んでダウンロードボタンを表示
-                            with open(pdf_filename, "rb") as pdf_file:
-                                pdf_bytes = pdf_file.read()
-                                st.download_button(
-                                    label="📥 ヒヤリハット報告書PDFをダウンロード",
-                                    data=pdf_bytes,
-                                    file_name=f"ヒヤリハット報告書_{work_date.strftime('%Y%m%d')}.pdf",
-                                    mime="application/pdf",
-                                    use_container_width=True
-                                )
-                            
-                            # 一時ファイルを削除
-                            os.unlink(pdf_filename)
-                            
-                            st.success("✅ ヒヤリハット報告書PDFを生成しました！")
+                        # PDF生成用のデータをセッション状態に保存（フォーム外で処理）
+                        st.session_state["pdf_generate_data"] = {
+                            "type": "hiyari",
+                            "pdf_data": pdf_data,
+                            "reporter_name": st.session_state.staff_name,
+                            "file_name": f"ヒヤリハット報告書_{work_date.strftime('%Y%m%d')}.pdf"
+                        }
+                        st.success("✅ ヒヤリハット報告書PDFを生成しました！")
                             
                     except Exception as e:
                         st.error(f"PDF生成エラー: {str(e)}")
                         st.exception(e)
+    
+    # フォーム外でPDFダウンロードボタンを表示
+    if "pdf_generate_data" in st.session_state:
+        pdf_gen_data = st.session_state["pdf_generate_data"]
+        try:
+            if pdf_gen_data["type"] == "accident":
+                # 事故報告書PDFを生成
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                    pdf_filename = tmp_file.name
+                    generator = AccidentReportGenerator(pdf_filename)
+                    generator.generate(pdf_gen_data["pdf_data"])
+                    
+                    # PDFファイルを読み込んでダウンロードボタンを表示
+                    with open(pdf_filename, "rb") as pdf_file:
+                        pdf_bytes = pdf_file.read()
+                        st.download_button(
+                            label="📥 事故報告書PDFをダウンロード",
+                            data=pdf_bytes,
+                            file_name=pdf_gen_data["file_name"],
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key="download_accident_pdf"
+                        )
+                    
+                    # 一時ファイルを削除
+                    os.unlink(pdf_filename)
+                    
+            elif pdf_gen_data["type"] == "hiyari":
+                # ヒヤリハット報告書PDFを生成
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                    pdf_filename = tmp_file.name
+                    generator = HiyariHattoGenerator(pdf_filename)
+                    generator.generate_report(
+                        pdf_gen_data["pdf_data"],
+                        reporter_name=pdf_gen_data["reporter_name"]
+                    )
+                    
+                    # PDFファイルを読み込んでダウンロードボタンを表示
+                    with open(pdf_filename, "rb") as pdf_file:
+                        pdf_bytes = pdf_file.read()
+                        st.download_button(
+                            label="📥 ヒヤリハット報告書PDFをダウンロード",
+                            data=pdf_bytes,
+                            file_name=pdf_gen_data["file_name"],
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key="download_hiyari_pdf"
+                        )
+                    
+                    # 一時ファイルを削除
+                    os.unlink(pdf_filename)
+            
+            # セッション状態からPDF生成データを削除（次回の表示を防ぐ）
+            del st.session_state["pdf_generate_data"]
+            
+        except Exception as e:
+            st.error(f"PDF生成エラー: {str(e)}")
+            st.exception(e)
+            # エラー時もセッション状態をクリア
+            if "pdf_generate_data" in st.session_state:
+                del st.session_state["pdf_generate_data"]
 
 
 def render_user_master():
