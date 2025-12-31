@@ -1174,10 +1174,19 @@ def render_daily_report_form():
             # 発生時刻
             col_time1, col_time2, col_time3 = st.columns(3)
             with col_time1:
+                # セッション状態から午前/午後を取得（文字列の場合はインデックスに変換）
+                am_pm_value = st.session_state.get("incident_am_pm", 1 if now.hour >= 12 else 0)
+                if isinstance(am_pm_value, str):
+                    # 文字列の場合はインデックスに変換
+                    am_pm_index = 0 if am_pm_value == "午前" else 1
+                else:
+                    # 整数の場合はそのまま使用
+                    am_pm_index = int(am_pm_value) if isinstance(am_pm_value, (int, float)) else (1 if now.hour >= 12 else 0)
+                
                 incident_am_pm = st.selectbox(
                     "午前/午後",
                     options=["午前", "午後"],
-                    index=st.session_state.get("incident_am_pm", 1 if now.hour >= 12 else 0),
+                    index=am_pm_index,
                     key="incident_am_pm",
                     help="発生時刻の午前/午後"
                 )
@@ -1289,10 +1298,19 @@ def render_daily_report_form():
             # 発生時刻
             col_time1, col_time2, col_time3 = st.columns(3)
             with col_time1:
+                # セッション状態から午前/午後を取得（文字列の場合はインデックスに変換）
+                am_pm_value = st.session_state.get("hiyari_am_pm", 1 if now.hour >= 12 else 0)
+                if isinstance(am_pm_value, str):
+                    # 文字列の場合はインデックスに変換
+                    am_pm_index = 0 if am_pm_value == "午前" else 1
+                else:
+                    # 整数の場合はそのまま使用
+                    am_pm_index = int(am_pm_value) if isinstance(am_pm_value, (int, float)) else (1 if now.hour >= 12 else 0)
+                
                 hiyari_am_pm = st.selectbox(
                     "午前/午後",
                     options=["午前", "午後"],
-                    index=st.session_state.get("hiyari_am_pm", 1 if now.hour >= 12 else 0),
+                    index=am_pm_index,
                     key="hiyari_am_pm",
                     help="発生時刻の午前/午後"
                 )
