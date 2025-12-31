@@ -1798,14 +1798,13 @@ def render_daily_users_calendar():
     st.markdown('<div class="section-header">📊 統計情報</div>', unsafe_allow_html=True)
     
     # 選択した月の統計
-    month_recorded_dates = [d for d in recorded_dates]
-    if month_recorded_dates:
-        total_users_all_days = sum(len(users) for _, _, users in month_recorded_days)
-        avg_users_per_day = total_users_all_days / len(month_recorded_days) if month_recorded_days else 0
+    if recorded_dates:
+        total_users_all_days = sum(len(users) for _, _, users in recorded_dates)
+        avg_users_per_day = total_users_all_days / len(recorded_dates) if recorded_dates else 0
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("記録日数", f"{len(month_recorded_days)}日")
+            st.metric("記録日数", f"{len(recorded_dates)}日")
         with col2:
             st.metric("総利用者数", f"{total_users_all_days}名")
         with col3:
