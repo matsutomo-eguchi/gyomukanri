@@ -256,17 +256,18 @@ class AccidentReportGenerator:
                     self.para_style
                 ),
                 Paragraph(
-                    '<para leading="13.86"><b>管理者</b><br/><br/><br/>㊞</para>',
+                    '<para leading="13.86"><b>管理者</b><br/>㊞</para>',
                     self.para_style
                 )
             ]
         ]
         
-        # ヘッダーテーブルの列幅（40%, 40%, 20%）
+        # ヘッダーテーブルの列幅（35%, 40%, 25%）
+        # 管理者列を少し広げてはみ出しを防止
         header_col_widths = [
-            content_width * 0.40,  # タイトル
+            content_width * 0.35,  # タイトル
             content_width * 0.40,  # 事業所名
-            content_width * 0.20,  # 管理者
+            content_width * 0.25,  # 管理者（幅を広げてはみ出し防止）
         ]
         
         # ヘッダーテーブルの高さ（HTMLでは60px、約15.9mm）
@@ -287,6 +288,9 @@ class AccidentReportGenerator:
             ('RIGHTPADDING', (0, 0), (-1, -1), 5),
             ('TOPPADDING', (0, 0), (-1, -1), 15),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+            # 管理者列のパディングを調整（はみ出し防止）
+            ('LEFTPADDING', (2, 0), (2, 0), 3),
+            ('RIGHTPADDING', (2, 0), (2, 0), 3),
         ])
         
         header_table.setStyle(header_table_style)
@@ -525,14 +529,19 @@ class AccidentReportGenerator:
         c.setFont(self.font_reg, 11)
         
         # HTMLの構造: 日付、改行、氏名 + 下線 + 印鑑マーク（すべて右寄せ）
-        # 右マージン20px = 約5.3mm
+        # 右マージン20px = 約5.3mm、はみ出し防止のため少し余裕を持たせる
         right_margin = 5.3 * mm
         sign_area_right = start_x + content_width - right_margin
         
-        # 日付欄（右寄せ）
+        # 日付欄（右寄せ、はみ出し防止）
         date_text = f"{record_date_year} 年 {record_date_month} 月 {record_date_day} 日"
         date_width = c.stringWidth(date_text, self.font_reg, 11)
-        c.drawString(sign_area_right - date_width, sign_area_y, date_text)
+        # 右端からマージンを確保してはみ出しを防止（最小2mmのマージンを確保）
+        max_date_x = start_x + content_width - date_width - 2 * mm
+        date_x = min(sign_area_right - date_width, max_date_x)
+        # 左端を超えないようにする
+        date_x = max(date_x, start_x + 2 * mm)
+        c.drawString(date_x, sign_area_y, date_text)
         
         # 改行後の氏名欄（右寄せ）
         sign_area_y -= 20 * mm  # line-height: 2.5相当
