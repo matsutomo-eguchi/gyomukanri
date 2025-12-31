@@ -449,6 +449,86 @@ def render_ai_assistant(text_area_key: str, child_name: Optional[str] = None):
                 st.rerun()
 
 
+def render_daily_comment_ai_assistant(text_area_key: str):
+    """日報コメント用AI文章生成アシストUI"""
+    st.markdown("#### 🤖 AI日報コメント生成アシスト")
+    
+    activity_content = st.text_area(
+        "活動内容",
+        height=80,
+        key=f"activity_content_{text_area_key}",
+        placeholder="例: 学習支援、自由遊びの見守り、集団遊びの補助",
+        help="実施した活動内容を入力してください"
+    )
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        challenges = st.text_area(
+            "課題",
+            height=80,
+            key=f"challenges_{text_area_key}",
+            placeholder="例: 集中力の維持、コミュニケーション",
+            help="本日の課題を入力してください"
+        )
+    
+    with col2:
+        improvements = st.text_area(
+            "改善点",
+            height=80,
+            key=f"improvements_{text_area_key}",
+            placeholder="例: 声かけのタイミング、環境設定",
+            help="今後の改善点を入力してください"
+        )
+    
+    generate_btn = st.button("✨ 日報コメント生成", key=f"generate_{text_area_key}", use_container_width=True)
+    
+    if generate_btn:
+        # 入力値の検証
+        if not activity_content and not challenges and not improvements:
+            st.warning("⚠️ 活動内容、課題、改善点のいずれかを入力してください。")
+        else:
+            with st.spinner("AIが日報コメントを生成中..."):
+                success, result = st.session_state.ai_helper.generate_daily_comment(
+                    activity_content=activity_content,
+                    challenges=challenges,
+                    improvements=improvements
+                )
+                if success:
+                    st.session_state[f"generated_text_{text_area_key}"] = result
+                    st.success("日報コメントを生成しました！")
+                else:
+                    st.error(result)
+    
+    # 生成された文章の表示と適用
+    if f"generated_text_{text_area_key}" in st.session_state:
+        st.markdown("**生成された日報コメント:**")
+        st.text_area(
+            "プレビュー",
+            value=st.session_state[f"generated_text_{text_area_key}"],
+            height=200,
+            key=f"preview_{text_area_key}",
+            disabled=True
+        )
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("✅ このコメントを使用", key=f"apply_{text_area_key}"):
+                # 日報コメント入力欄に値を設定
+                st.session_state[text_area_key] = st.session_state[f"generated_text_{text_area_key}"]
+                # 生成されたテキストをクリア
+                del st.session_state[f"generated_text_{text_area_key}"]
+                # 入力フィールドもクリア（オプション）
+                st.session_state[f"activity_content_{text_area_key}"] = ""
+                st.session_state[f"challenges_{text_area_key}"] = ""
+                st.session_state[f"improvements_{text_area_key}"] = ""
+                st.rerun()
+        with col2:
+            if st.button("❌ キャンセル", key=f"cancel_{text_area_key}"):
+                del st.session_state[f"generated_text_{text_area_key}"]
+                st.rerun()
+
+
 def render_accident_ai_assistant(text_area_key: str, report_type: str):
     """事故報告書用AI文章生成アシストUI"""
     type_names = {
@@ -1082,6 +1162,14 @@ def render_daily_report_form():
     # 業務報告・共有事項
     st.markdown("---")
     st.markdown('<div class="section-header">📢 業務報告・共有事項</div>', unsafe_allow_html=True)
+    
+    # 日報コメントセクション（フォーム外）
+    st.markdown("#### 📝 日報コメント（職員の1日の振り返り）")
+    
+    # AIアシスト機能（フォーム外）
+    render_daily_comment_ai_assistant("daily_comment")
+    
+    st.markdown("---")
     
     incident_toggle = st.toggle("ヒヤリハット・事故報告", key="incident_toggle")
     
@@ -1732,6 +1820,18 @@ def render_daily_report_form():
             category_index = -1
             hiyari_countermeasure = ""
         
+        # 日報コメント入力（フォーム内）
+        daily_comment = st.text_area(
+            "日報コメント",
+            height=150,
+            key="daily_comment",
+            placeholder="本日の活動内容、課題、改善点などを記入してください",
+            help="AIアシスト機能を使用して文章を作成することもできます",
+            value=st.session_state.get("daily_comment", "")
+        )
+        
+        st.markdown("---")
+        
         handover = st.text_area(
             "申し送り事項",
             height=100,
@@ -1753,6 +1853,7 @@ def render_daily_report_form():
         
         if report_submitted:
             form_incident_toggle = st.session_state.get("incident_toggle", False)
+            daily_comment_value = st.session_state.get("daily_comment", "")
             report_data = {
                 "業務日": st.session_state.work_date.isoformat(),
                 "記入スタッフ名": st.session_state.staff_name,
@@ -1765,6 +1866,7 @@ def render_daily_report_form():
                 "事故原因": incident_cause if form_incident_toggle else "",
                 "対策": incident_countermeasure if form_incident_toggle else "",
                 "その他": incident_others if form_incident_toggle else "",
+                "日報コメント": daily_comment_value,
                 "申し送り事項": handover,
                 "備品購入要望": request
             }

@@ -812,6 +812,93 @@ class AIHelper:
             return False, f"API接続エラー: {str(e)}"
         except Exception as e:
             return False, f"予期しないエラーが発生しました: {str(e)}"
+    
+    def generate_daily_comment(self, activity_content: str = "", challenges: str = "", improvements: str = "") -> tuple:
+        """
+        日報コメントを生成（職員が1日を振り返るコメント）
+        
+        Args:
+            activity_content: 活動内容（学習支援、自由遊びの見守り、集団遊びの補助など）
+            challenges: 課題
+            improvements: 改善点
+            
+        Returns:
+            (成功フラグ, 生成された日報コメント)
+        """
+        if not self.is_available():
+            return False, "APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+        
+        # プロンプトの構築
+        prompt = f"""#命令書:
+あなたは世界でトップで有能なプロの放課後等デイサービスの児童指導員です。職員が1日を振り返る日報コメントを作成してください。以下の｢要件｣を踏まえ、｢アウトプット例｣のように、最高の日報コメントを作成してください。
+
+##要件:
+･文字数は200字ていど
+･文章は簡潔に書く
+･語り口調で書く（「〜でした」「〜しました」「〜できました」など、自然な語り口調）
+･世界でトップで有能なプロの放課後等デイサービスの職員として、専門性と経験に裏打ちされた文章にする
+･活動内容:学習支援、自由遊びの見守り、集団遊びの補助
+･課題:
+{challenges if challenges else "（未入力）"}
+･改善点:
+{improvements if improvements else "（未入力）"}
+
+##アウトプット例:
+
+【本日の活動内容】
+{activity_content if activity_content else "本日は学習支援、自由遊びの見守り、集団遊びの補助を行いました。"}
+
+【本日の課題】
+{challenges if challenges else "（課題を記入）"}
+
+【今後の改善点】
+{improvements if improvements else "（改善点を記入）"}
+
+上記の形式で、入力された情報を基に、語り口調で、世界でトップで有能なプロの放課後等デイサービスの職員としてふさわしい、最高の日報コメントを作成してください。遠慮せずに全力を尽くしてください。秀逸にultrahardに取り組んでください。最高を超えるアウトプットを実現してください。"""
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "あなたは世界でトップで有能なプロの放課後等デイサービスの児童指導員です。職員が1日を振り返る日報コメントを、語り口調で、専門性と経験に裏打ちされた文章として作成するのが得意です。遠慮せずに、全力を尽くしてください。秀逸にultrahardに取り組んでください。最高を超えるアウトプットを実現してください。"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.7,
+                "max_tokens": 500
+            }
+            
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                generated_text = result["choices"][0]["message"]["content"].strip()
+                return True, generated_text
+            else:
+                error_msg = f"APIエラー: {response.status_code} - {response.text}"
+                return False, error_msg
+                
+        except requests.exceptions.Timeout:
+            return False, "APIへの接続がタイムアウトしました。しばらく待ってから再試行してください。"
+        except requests.exceptions.RequestException as e:
+            return False, f"API接続エラー: {str(e)}"
+        except Exception as e:
+            return False, f"予期しないエラーが発生しました: {str(e)}"
 
 
     def is_gemini_available(self) -> bool:
