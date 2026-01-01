@@ -236,14 +236,22 @@ class AIHelper:
         
         try:
             # まず音声をテキストに変換（補助情報を含める）
+            print("[DEBUG] Starting audio transcription")
             success, transcribed_text = self.transcribe_audio_to_text(audio_file_path, context_info)
+            print(f"[DEBUG] Transcription result: success={success}, text_length={len(transcribed_text) if transcribed_text else 0}")
             if not success:
                 return False, transcribed_text
-            
+
             # テキストから議事録を構造化
-            return self.generate_meeting_minutes_from_text(transcribed_text)
-            
+            print("[DEBUG] Starting meeting minutes generation")
+            result = self.generate_meeting_minutes_from_text(transcribed_text)
+            print(f"[DEBUG] Final result: {result}")
+            return result
+
         except Exception as e:
+            print(f"[DEBUG] Exception in generate_meeting_minutes_from_audio: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False, f"議事録生成エラー: {str(e)}"
     
     def ensure_title_format(self, title: str, source_text: str = "") -> str:
@@ -913,14 +921,22 @@ class AIHelper:
         
         try:
             # まず音声をテキストに変換（補助情報を含める）
+            print("[DEBUG] Starting audio transcription")
             success, transcribed_text = self.transcribe_audio_to_text(audio_file_path, context_info)
+            print(f"[DEBUG] Transcription result: success={success}, text_length={len(transcribed_text) if transcribed_text else 0}")
             if not success:
                 return False, transcribed_text
-            
+
             # テキストから議事録を構造化
-            return self.generate_meeting_minutes_from_text(transcribed_text)
-            
+            print("[DEBUG] Starting meeting minutes generation")
+            result = self.generate_meeting_minutes_from_text(transcribed_text)
+            print(f"[DEBUG] Final result: {result}")
+            return result
+
         except Exception as e:
+            print(f"[DEBUG] Exception in generate_meeting_minutes_from_audio: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False, f"議事録生成エラー: {str(e)}"
     
     def generate_meeting_minutes_from_text(self, text: str) -> Tuple[bool, Dict[str, str]]:
@@ -957,6 +973,9 @@ class AIHelper:
             return True, validated_result
 
         except Exception as e:
+            print(f"[DEBUG] Exception in generate_meeting_minutes_from_text: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False, f"議事録生成エラー: {str(e)}"
 
     
@@ -1165,14 +1184,22 @@ class AIHelper:
         
         try:
             # まず音声をテキストに変換（補助情報を含める）
+            print("[DEBUG] Starting audio transcription")
             success, transcribed_text = self.transcribe_audio_to_text(audio_file_path, context_info)
+            print(f"[DEBUG] Transcription result: success={success}, text_length={len(transcribed_text) if transcribed_text else 0}")
             if not success:
                 return False, transcribed_text
-            
+
             # テキストから議事録を構造化
-            return self.generate_meeting_minutes_from_text(transcribed_text)
-            
+            print("[DEBUG] Starting meeting minutes generation")
+            result = self.generate_meeting_minutes_from_text(transcribed_text)
+            print(f"[DEBUG] Final result: {result}")
+            return result
+
         except Exception as e:
+            print(f"[DEBUG] Exception in generate_meeting_minutes_from_audio: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False, f"議事録生成エラー: {str(e)}"
     
     def generate_meeting_minutes_from_text(self, text: str) -> Tuple[bool, Dict[str, str]]:
@@ -1209,114 +1236,159 @@ class AIHelper:
             return True, validated_result
 
         except Exception as e:
+            print(f"[DEBUG] Exception in generate_meeting_minutes_from_text: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False, f"議事録生成エラー: {str(e)}"
 
     def _analyze_meeting_content(self, text: str) -> Dict[str, str]:
         """
         会議内容をAIで分析・構造化する
         """
-        # Gemini 3 Flash Previewを使用して高度な議事録構造化
-        model = genai.GenerativeModel('gemini-3-flash-preview')
+        print(f"[DEBUG] _analyze_meeting_content called with text length: {len(text)}")
 
-        prompt = f"""あなたは、放課後等デイサービスのベテラン管理者です。以下の音声テキストから、朝礼議事録を高度に分析・構造化してください。
+        try:
+            # API設定の確認
+            if not self._ensure_gemini_configured():
+                print("[DEBUG] Gemini config failed, using fallback")
+                return self._fallback_parse_meeting_text(text, "")
 
-        【分析対象テキスト】:
-        {text}
+            # Gemini 3 Flash Previewを使用して高度な議事録構造化
+            model = genai.GenerativeModel('gemini-3-flash-preview')
+            print("[DEBUG] Gemini model created successfully")
 
-        【分析プロセス】:
-        1. まずテキスト全体を注意深く読み、朝礼の内容を把握する
-        2. 各話題を以下の4つのカテゴリに正確に分類する
-        3. 各カテゴリの内容をMECE原則に基づいて整理・要約する
-        4. 重要なポイントを見落とさないよう徹底的に確認する
-
-        【カテゴリ定義と分類基準】:
-
-        🔷 **議題・内容**（会議の主な議論内容）
-        - 朝礼で話し合われた主要な議題
-        - 児童の体調・様子報告、業務連絡、問題提起など
-        - 議論された内容の概要と結論
-        - アクションアイテムや今後の対応方針
-        - 【分類基準】: 「～について話し合った」「～の報告」「～の検討」などの表現
-
-        🔷 **決定事項**（合意形成された具体的な決定）
-        - 会議で決定された事項
-        - 方針決定、担当者決定、スケジュール決定など
-        - 【分類基準】: 「決定した」「～することになった」「～を担当する」「～に決まった」などの表現
-        - 【除外】: 単なる共有情報や報告事項
-
-        🔷 **共有事項**（スタッフ間で周知すべき情報）
-        - 全スタッフへの連絡事項、注意喚起
-        - 施設全体のルール変更、外部からの連絡
-        - ヒヤリハット事例、安全管理情報
-        - 【分類基準】: 「共有してください」「注意してください」「全員に連絡」「～についてお知らせ」などの表現
-
-        🔷 **その他メモ**（タイムライン形式の会議の流れ）
-        - 会議の時系列的な流れ
-        - 各話題の開始時間と概要
-        - 発言者の情報（可能であれば）
-        - 【形式】: 以下のMarkdown表形式
-        |タイムスタンプ|話題|備考|
-        |:---|:---|:---|
-        |00:00|話題1|備考1|
-        |00:05|話題2|備考2|
-
-        【出力要件】:
-        - 各カテゴリの内容をMECE原則で整理（重複なく、漏れなく）
-        - 重要な情報を見落とさないよう徹底的に分析
-        - 保育園運営に必要な実務的な内容を優先
-        - 抽象的な表現ではなく、具体的・実践的な記述
-        - JSON形式のみを出力（説明文不要）
-
-        【JSON出力形式】:
-        {{
-        "議題・内容": "会議の主要な議論内容を構造化して記述\\n\\n【児童の様子】\\n- 児童A: 体調良好、学習意欲高い\\n- 児童B: 風邪気味、早退予定\\n\\n【業務連絡】\\n- 明日の送迎担当変更\\n- 新しい教材の導入検討\\n\\n【問題解決】\\n- 駐車場混雑時の対応策議論",
-        "決定事項": "- 明日の送迎担当：田中さん→鈴木さんに変更\\n- 新教材の導入：来月から試験運用\\n- 駐車場対策：予約制導入を決定",
-        "共有事項": "- インフルエンザ注意報発令中\\n- 来週の保護者会開催のお知らせ\\n- 緊急時の避難経路確認のお願い\\n- 新入職員の歓迎会について",
-        "その他メモ": "|タイムスタンプ|話題|備考|\\n|:---|:---|:---|\\n|09:00|朝礼開始|全員出席|\\n|09:05|児童様子報告|各担当者より|\\n|09:15|業務連絡|送迎担当変更について|\\n|09:25|共有事項|インフルエンザ注意報|\\n|09:35|その他議題|新教材導入検討|\\n|09:45|朝礼終了|次回までよろしくお願いします|"
-        }}
-
-        【重要】:
-        - 音声テキストに含まれない情報を絶対に追加しない
-        - 各カテゴリを明確に区分けする
-        - 実務的な内容を優先し、抽象的な表現を避ける
-        - 日本語で記述、JSON形式のみ出力
-"""
-
-        response = model.generate_content(
+            prompt = f"""あなたは保育園の朝礼を分析するアシスタントです。以下のテキストから議事録を作成してください。
+            テキスト:            {text}
+            以下のJSON形式で出力してください：            {{            "議題・内容": "会議の主要な話題と議論内容",            "決定事項": "決定された具体的な事項",            "共有事項": "スタッフへの連絡事項",            "その他メモ": "会議のタイムライン"            }}
+            注意:            - 必ず有効なJSON形式で出力            - 各項目は簡潔にまとめる            - 日本語で記述            - JSON以外は何も出力しない            """
+            print(f"[DEBUG] Sending prompt to Gemini, length: {len(prompt)}")
+            response = model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
-                    temperature=0.3,
-                    max_output_tokens=2000
+                    temperature=0.1,  # より決定論的に
+                    max_output_tokens=3000  # より長い出力に対応
                 )
             )
+            print(f"[DEBUG] Received response from Gemini")
             
 
-        # JSONをパース
-        import json
-        import re
+            # JSONをパース
+            # JSONをパース
+            import json
+            import re
+            response_text = response.text.strip()
+            print(f"[DEBUG] Response text length: {len(response_text)}")
+            print(f"[DEBUG] Response text preview: {response_text[:200]}...")
+
+            # レスポンスが空でないかチェック
+            if not response_text:
+                print("[DEBUG] Response text is empty")
+                return {
+                    "議題・内容": text[:1000] if len(text) > 1000 else text,
+                    "決定事項": "",
+                    "共有事項": "",
+                    "その他メモ": ""
+                }
+
+            # JSON部分を抽出（コードブロックがあれば除去）
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                json_str = response_text
+
+            # JSONパースを試行
+            print(f"[DEBUG] Attempting to parse JSON, length: {len(json_str)}")
+            try:
+                meeting_data = json.loads(json_str)
+                print(f"[DEBUG] JSON parse successful, keys: {list(meeting_data.keys())}")
+            except json.JSONDecodeError as json_error:
+                # JSONパースに失敗した場合、テキストから手動で構造化
+                print(f"[DEBUG] JSON parse failed: {json_error}, using fallback")
+                meeting_data = self._fallback_parse_meeting_text(text, response_text)
         
-        response_text = response.text.strip()
-        
-        # JSON部分を抽出（コードブロックがあれば除去）
-        json_match = re.search(r'\{[\s\S]*\}', response_text)
-        if json_match:
-            json_str = json_match.group(0)
-        else:
-            json_str = response_text
-        
-        # JSONをパース
-        meeting_data = json.loads(json_str)
-        
-        # 必須フィールドの確認
-        if "議題・内容" not in meeting_data:
-            meeting_data["議題・内容"] = text[:500]  # フォールバック
-        
-        # 空のフィールドを空文字列に設定
-        for key in ["決定事項", "共有事項", "その他メモ"]:
-            if key not in meeting_data:
-                meeting_data[key] = ""
-        
-        return meeting_data
+            # 必須フィールドの確認
+            if "議題・内容" not in meeting_data:
+                meeting_data["議題・内容"] = text[:500]  # フォールバック
+
+            # 空のフィールドを空文字列に設定
+            for key in ["決定事項", "共有事項", "その他メモ"]:
+                if key not in meeting_data:
+                    meeting_data[key] = ""
+
+            print(f"[DEBUG] Returning meeting_data with keys: {list(meeting_data.keys())}")
+            return meeting_data
+
+        except Exception as e:
+            print(f"[DEBUG] Exception in _analyze_meeting_content: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return self._fallback_parse_meeting_text(text, "")
+
+    def _fallback_parse_meeting_text(self, original_text: str, ai_response: str) -> Dict[str, str]:
+        """
+        AIレスポンスがJSONでない場合のフォールバック処理
+        テキストから手動で構造化する
+        """
+        try:
+            # AIレスポンスから各セクションを抽出しようとする
+            content = ai_response.strip()
+
+            # デフォルト値
+            meeting_data = {
+                "議題・内容": "",
+                "決定事項": "",
+                "共有事項": "",
+                "その他メモ": ""
+            }
+
+            # シンプルなパースを試行
+            lines = content.split('\n')
+            current_section = "議題・内容"
+
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # セクションの判定
+                if "議題・内容" in line or "会議の概要" in line:
+                    current_section = "議題・内容"
+                    continue
+                elif "決定事項" in line or "決定した" in line:
+                    current_section = "決定事項"
+                    continue
+                elif "共有事項" in line or "共有" in line:
+                    current_section = "共有事項"
+                    continue
+                elif "その他メモ" in line or "タイムスタンプ" in line:
+                    current_section = "その他メモ"
+                    continue
+
+                # 内容の追加
+                if line.startswith('-') or line.startswith('・'):
+                    if meeting_data[current_section]:
+                        meeting_data[current_section] += '\n'
+                    meeting_data[current_section] += line
+                elif len(line) > 10:  # 意味のある長さの行
+                    if meeting_data[current_section]:
+                        meeting_data[current_section] += '\n'
+                    meeting_data[current_section] += line
+
+            # 議題・内容が空の場合、元のテキストを使用
+            if not meeting_data["議題・内容"].strip():
+                meeting_data["議題・内容"] = original_text[:1000] if len(original_text) > 1000 else original_text
+
+            return meeting_data
+
+        except Exception as e:
+            # 最終フォールバック
+            return {
+                "議題・内容": original_text[:1000] if len(original_text) > 1000 else original_text,
+                "決定事項": "",
+                "共有事項": "",
+                "その他メモ": ""
+            }
 
     def _preprocess_meeting_text(self, text: str) -> str:
         """

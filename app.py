@@ -2979,7 +2979,7 @@ def render_morning_meeting():
                                 st.session_state.meeting_decisions = result.get("決定事項", "")
                                 st.session_state.meeting_shared = result.get("共有事項", "")
                                 st.session_state.meeting_notes = result.get("その他メモ", "")
-                                
+
                                 # タイトルも設定（「の件」形式で）
                                 if "タイトル" in result and result.get("タイトル"):
                                     st.session_state.meeting_title = result.get("タイトル")
@@ -2988,11 +2988,12 @@ def render_morning_meeting():
                                     title_success, generated_title = st.session_state.ai_helper.generate_title_from_text(st.session_state.meeting_agenda)
                                     if title_success and generated_title:
                                         st.session_state.meeting_title = generated_title
-                                
+
                                 st.success("✅ 議事録を生成しました！以下の内容を確認・編集して保存してください。")
                                 st.rerun()
                             else:
-                                st.error(f"議事録の生成に失敗しました: {result}")
+                                error_msg = result if result is not None else "不明なエラー"
+                                st.error(f"議事録の生成に失敗しました: {error_msg}")
                         except Exception as e:
                             st.error(f"エラーが発生しました: {str(e)}")
                         finally:
