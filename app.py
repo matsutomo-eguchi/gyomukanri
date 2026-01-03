@@ -3564,17 +3564,9 @@ def render_morning_meeting():
                             st.write("**保存しようとしたデータ**:")
                             st.json(meeting_data)
 
-                            # 再試行ボタン
-                            if st.button("🔄 保存を再試行", key="retry_save_after_error"):
-                                with st.spinner("再試行中..."):
-                                    retry_success, retry_error = dm.save_morning_meeting(meeting_data)
-                                if retry_success:
-                                    st.success("✅ 再試行成功しました！")
-                                    st.balloons()
-                                    st.rerun()
-                                else:
-                                    st.error(f"❌ 再試行も失敗しました: {retry_error}")
-                                    st.code(f"再試行エラー詳細: {retry_error}")
+                            # 再試行の案内
+                            st.info("💡 **再試行方法**: 上記のエラー内容を確認し、必要に応じて入力を修正してから、再度「💾 議事録を保存」ボタンをクリックしてください。")
+                            st.warning("⚠️ 同じエラーが続く場合は、管理者にお問い合わせください。")
     
     with tab2:
         st.markdown('<div class="section-header">📚 朝礼議事録一覧</div>', unsafe_allow_html=True)
