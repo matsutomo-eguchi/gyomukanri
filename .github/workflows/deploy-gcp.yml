@@ -26,22 +26,10 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          if [ -z "${GCP_SA_KEY}" ]; then
-            echo "::error::GCP_SA_KEY secret is not set or is empty"
-            exit 1
-          fi
-          if [ -z "${GCP_PROJECT_ID}" ]; then
-            echo "::error::GCP_PROJECT_ID secret is not set or is empty"
-            exit 1
-          fi
-          if [ -z "${SUPABASE_URL}" ]; then
-            echo "::error::SUPABASE_URL secret is not set or is empty"
-            exit 1
-          fi
-          if [ -z "${SUPABASE_KEY}" ]; then
-            echo "::error::SUPABASE_KEY secret is not set or is empty"
-            exit 1
-          fi
+          test -n "${GCP_SA_KEY}" || { echo "::error::GCP_SA_KEY secret is not set or is empty"; exit 1; }
+          test -n "${GCP_PROJECT_ID}" || { echo "::error::GCP_PROJECT_ID secret is not set or is empty"; exit 1; }
+          test -n "${SUPABASE_URL}" || { echo "::error::SUPABASE_URL secret is not set or is empty"; exit 1; }
+          test -n "${SUPABASE_KEY}" || { echo "::error::SUPABASE_KEY secret is not set or is empty"; exit 1; }
           echo "✓ All required secrets are properly configured"
 
       - name: Authenticate to Google Cloud
