@@ -461,7 +461,7 @@ class AccidentReportGenerator:
         datetime_text = f'<para leading="13.86"><b>事故発生日時</b><br/>{date_year} 年 {date_month} 月 {date_day} 日<br/>{time_hour} 時 {time_min_formatted} 分頃<br/>（ {date_weekday} ）曜日</para>'
         
         # 対象者名を処理（複数の場合は「、」で区切る）
-        subject_name = data.get("subject_name", "")
+        subject_name = str(data.get("subject_name", ""))
         if isinstance(subject_name, list):
             # リストの場合は「、」で結合
             subject_name = "、".join(subject_name) if subject_name else ""

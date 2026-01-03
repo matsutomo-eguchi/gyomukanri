@@ -1485,9 +1485,8 @@ class DataManager:
                 return False, validation_error
 
             if self._is_supabase_enabled():
-                success = self.supabase_manager.save_morning_meeting(meeting_data)
+                success, error_msg = self.supabase_manager.save_morning_meeting(meeting_data)
                 if not success:
-                    error_msg = "Supabaseへの保存に失敗しました"
                     print(f"朝礼議事録保存エラー (Supabase): {error_msg}")
                     return False, error_msg
                 return True, ""

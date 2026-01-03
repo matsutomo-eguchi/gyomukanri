@@ -3423,7 +3423,15 @@ def render_morning_meeting():
 
                     if success:
                         st.success("✅ 朝礼議事録を保存しました！")
-                        st.info("📋 保存された議事録は「📚 議事録閲覧」タブから確認できます。")
+                        st.info("📋 **「📚 議事録閲覧」タブに切り替えて保存された議事録を確認してください。**")
+
+                        # 保存されたデータを確認（デバッグ用）
+                        saved_meetings = st.session_state.data_manager.get_morning_meetings()
+                        if saved_meetings:
+                            st.info(f"💾 保存確認: {len(saved_meetings)}件の議事録が保存されています。")
+                        else:
+                            st.warning("⚠️ 保存確認: 議事録が保存されていません。ファイルを確認してください。")
+
                         st.balloons()
                         # セッション状態をクリア
                         if "meeting_agenda" in st.session_state:
@@ -3497,6 +3505,21 @@ def render_morning_meeting():
         
         if not meetings:
             st.info("朝礼議事録が登録されていません。")
+            # デバッグ情報
+            if st.session_state.get("debug_mode", False):
+                st.info("デバッグ: Supabase有効状態: " + ("有効" if dm._is_supabase_enabled() else "無効"))
+                try:
+                    import os
+                    meeting_file = dm.data_dir / "morning_meetings.json"
+                    if meeting_file.exists():
+                        st.info(f"デバッグ: ファイル存在 - {meeting_file}")
+                        with open(meeting_file, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            st.code(f"ファイル内容:\n{content}")
+                    else:
+                        st.warning(f"デバッグ: ファイル不存在 - {meeting_file}")
+                except Exception as e:
+                    st.error(f"デバッグ情報取得エラー: {e}")
         else:
             st.markdown(f"**{len(meetings)}件の議事録が見つかりました**")
             
