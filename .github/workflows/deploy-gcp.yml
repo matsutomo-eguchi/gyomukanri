@@ -73,7 +73,7 @@ jobs:
             echo "Testing Supabase connection..."
 
             # Pythonスクリプトを実行
-            python3 -c "
+            python3 << 'EOF'
             import os
             import sys
 
@@ -140,7 +140,7 @@ jobs:
                 print('   2. Supabaseプロジェクトが有効か確認してください')
                 print('   3. APIキーに適切な権限があるか確認してください')
                 sys.exit(1)
-            "
+EOF
 
             # Pythonスクリプトの終了コードをチェック
             if [ $? -ne 0 ]; then
