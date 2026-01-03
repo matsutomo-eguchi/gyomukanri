@@ -87,12 +87,23 @@ CREATE TABLE IF NOT EXISTS tags_master (
     UNIQUE(tag_type, tag_name)
 );
 
+-- 日別利用者記録テーブル
+CREATE TABLE IF NOT EXISTS daily_users (
+    id SERIAL PRIMARY KEY,
+    target_date DATE NOT NULL,
+    user_names JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(target_date)
+);
+
 -- インデックスの作成（パフォーマンス向上）
 CREATE INDEX IF NOT EXISTS idx_daily_reports_業務日 ON daily_reports(業務日);
 CREATE INDEX IF NOT EXISTS idx_morning_meetings_日付 ON morning_meetings(日付);
 CREATE INDEX IF NOT EXISTS idx_users_master_active ON users_master(active);
 CREATE INDEX IF NOT EXISTS idx_staff_accounts_user_id ON staff_accounts(user_id);
 CREATE INDEX IF NOT EXISTS idx_tags_master_tag_type ON tags_master(tag_type);
+CREATE INDEX IF NOT EXISTS idx_daily_users_target_date ON daily_users(target_date);
 
 -- Row Level Security (RLS) の設定
 -- 重要: SupabaseではデフォルトでRLSが有効になっている場合があります
@@ -104,6 +115,7 @@ ALTER TABLE daily_reports DISABLE ROW LEVEL SECURITY;
 ALTER TABLE staff_accounts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE morning_meetings DISABLE ROW LEVEL SECURITY;
 ALTER TABLE tags_master DISABLE ROW LEVEL SECURITY;
+ALTER TABLE daily_users DISABLE ROW LEVEL SECURITY;
 
 -- もしRLSを有効化する場合は、以下のポリシーを設定してください
 -- ALTER TABLE users_master ENABLE ROW LEVEL SECURITY;
@@ -120,6 +132,9 @@ ALTER TABLE tags_master DISABLE ROW LEVEL SECURITY;
 -- 
 -- ALTER TABLE tags_master ENABLE ROW LEVEL SECURITY;
 -- CREATE POLICY "Allow all operations" ON tags_master FOR ALL USING (true) WITH CHECK (true);
+-- 
+-- ALTER TABLE daily_users ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Allow all operations" ON daily_users FOR ALL USING (true) WITH CHECK (true);
 
 -- 初期データの投入（オプション）
 -- デフォルトタグの追加

@@ -414,6 +414,10 @@ class DataManager:
         Returns:
             削除した件数
         """
+        if self._is_supabase_enabled():
+            success = self.supabase_manager.delete_users(names)
+            return len(names) if success else 0
+        
         users = self._load_master()
         deleted_count = 0
         
@@ -438,6 +442,9 @@ class DataManager:
         Returns:
             成功した場合True
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.restore_user(name)
+        
         users = self._load_master()
         for user in users:
             if user["name"] == name:
@@ -458,6 +465,9 @@ class DataManager:
         Returns:
             成功した場合True
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.sort_users(user_ids)
+        
         try:
             users = self._load_master()
             
@@ -497,6 +507,9 @@ class DataManager:
         Returns:
             削除した件数
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.permanently_delete_users(names)
+        
         try:
             users = self._load_master()
             original_count = len(users)
@@ -1258,6 +1271,9 @@ class DataManager:
     
     def get_all_staff_accounts(self) -> List[Dict]:
         """全スタッフアカウント情報を取得（パスワードハッシュは除外）"""
+        if self._is_supabase_enabled():
+            return self.supabase_manager.get_all_staff_accounts()
+        
         accounts = self._load_staff_accounts()
         return [
             {
@@ -1279,6 +1295,9 @@ class DataManager:
         Returns:
             成功した場合True
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.delete_staff_account(user_id)
+        
         accounts = self._load_staff_accounts()
         
         for account in accounts:
@@ -1302,6 +1321,9 @@ class DataManager:
         Returns:
             成功した場合True
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.change_password(user_id, old_password, new_password)
+        
         accounts = self._load_staff_accounts()
         
         old_password_hash = self._hash_password(old_password)
@@ -1537,6 +1559,9 @@ class DataManager:
         Returns:
             成功した場合True
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.save_daily_users(target_date, user_names)
+        
         try:
             daily_users = self._load_daily_users()
             # 日付をキーとして利用者名のリストを保存
@@ -1557,6 +1582,9 @@ class DataManager:
         Returns:
             利用者名のリスト
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.get_daily_users(target_date)
+        
         try:
             daily_users = self._load_daily_users()
             return daily_users.get(target_date, [])
@@ -1571,6 +1599,9 @@ class DataManager:
         Returns:
             日付をキーとした利用者名のリストの辞書
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.get_all_daily_users()
+        
         try:
             return self._load_daily_users()
         except Exception as e:
@@ -1587,6 +1618,9 @@ class DataManager:
         Returns:
             成功した場合True
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.delete_daily_users(target_date)
+        
         try:
             daily_users = self._load_daily_users()
             if target_date in daily_users:

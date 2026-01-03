@@ -32,15 +32,6 @@ jobs:
             MISSING_SECRETS+=("GCP_PROJECT_ID")
           fi
           
-          # Supabaseの環境変数はオプション（ローカルファイルストレージを使用する場合は不要）
-          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_KEY }}" ]; then
-            echo "⚠️  Supabase環境変数が設定されていません。ローカルファイルストレージを使用します。"
-            echo "⚠️  注意: Cloud Runではローカルファイルストレージのデータは永続化されません。"
-            echo "⚠️  データを永続化するには、Supabase環境変数を設定することを推奨します。"
-          else
-            echo "✓ Supabase環境変数が設定されています。データはSupabaseに保存されます。"
-          fi
-          
           if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
             echo "::error::The following secrets are not set or are empty: ${MISSING_SECRETS[*]}"
             echo "Please set these secrets in GitHub repository settings: Settings > Secrets and variables > Actions"
@@ -48,6 +39,107 @@ jobs:
           fi
           
           echo "✓ All required secrets are properly configured"
+          
+          # Supabase環境変数の確認
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_KEY }}" ]; then
+            echo ""
+            echo "⚠️  ⚠️  ⚠️  WARNING ⚠️  ⚠️  ⚠️"
+            echo "⚠️  Supabase環境変数が設定されていません。"
+            echo "⚠️  ローカルファイルストレージを使用しますが、"
+            echo "⚠️  Cloud Runではデータは永続化されません。"
+            echo "⚠️  データを永続化するには、Supabase環境変数を設定してください。"
+            echo "⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️"
+            echo ""
+          else
+            echo "✓ Supabase環境変数が設定されています。"
+          fi
+
+      - name: Install Python dependencies for testing
+        if: ${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_KEY != '' }}
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install supabase>=2.0.0
+
+      - name: Test Supabase connection
+        if: ${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_KEY != '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          echo "Testing Supabase connection..."
+          python3 << 'EOF'
+          import os
+          import sys
+          
+          try:
+              from supabase import create_client
+              
+              supabase_url = os.getenv("SUPABASE_URL")
+              supabase_key = os.getenv("SUPABASE_KEY")
+              
+              if not supabase_url or not supabase_key:
+                  print("❌ Supabase環境変数が設定されていません")
+                  sys.exit(1)
+              
+              print(f"🔗 Supabase URL: {supabase_url[:50]}...")
+              
+              # クライアント作成
+              client = create_client(supabase_url, supabase_key)
+              print("✓ Supabaseクライアントを作成しました")
+              
+              # テーブルアクセステスト
+              required_tables = [
+                  "users_master",
+                  "daily_reports",
+                  "staff_accounts",
+                  "morning_meetings",
+                  "tags_master",
+                  "daily_users"
+              ]
+              
+              failed_tables = []
+              for table_name in required_tables:
+                  try:
+                      response = client.table(table_name).select("id").limit(1).execute()
+                      print(f"✓ {table_name}: アクセス可能")
+                  except Exception as e:
+                      error_msg = str(e)
+                      print(f"❌ {table_name}: アクセスエラー - {error_msg[:100]}")
+                      failed_tables.append(table_name)
+              
+              if failed_tables:
+                  print("")
+                  print("⚠️  以下のテーブルにアクセスできません:")
+                  for table in failed_tables:
+                      print(f"   - {table}")
+                  print("")
+                  print("💡 解決方法:")
+                  print("   1. Supabase Dashboard → SQL Editor を開く")
+                  print("   2. supabase_schema.sql の内容を実行してください")
+                  print("   3. 特に、RLS (Row Level Security) が無効化されているか確認してください")
+                  sys.exit(1)
+              
+              print("")
+              print("✅ すべてのテーブルにアクセス可能です！")
+              
+          except ImportError:
+              print("❌ supabaseパッケージがインストールされていません")
+              print("   requirements.txtにsupabase>=2.0.0が含まれているか確認してください")
+              sys.exit(1)
+          except Exception as e:
+              print(f"❌ Supabase接続エラー: {e}")
+              print("")
+              print("💡 トラブルシューティング:")
+              print("   1. SUPABASE_URLとSUPABASE_KEYが正しいか確認してください")
+              print("   2. Supabaseプロジェクトが有効か確認してください")
+              print("   3. APIキーに適切な権限があるか確認してください")
+              sys.exit(1)
+          EOF
+          
+          if [ $? -ne 0 ]; then
+            echo "::error::Supabase接続テストに失敗しました。デプロイを続行しますが、アプリケーションが正常に動作しない可能性があります。"
+            echo "::warning::Supabase設定を確認してください。詳細は上記のエラーメッセージを参照してください。"
+          fi
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2

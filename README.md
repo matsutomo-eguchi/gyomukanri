@@ -254,16 +254,20 @@ Supabase URL/Keyが設定されていない場合、データはローカルフ�
 - 日報Markdownファイル: `data/reports/`
 - バックアップ: `data/backups/`
 
-#### Supabaseモード（オプション）
+#### Supabaseモード（推奨・Cloud Runデプロイ時は必須）
 Supabase URL/Keyが設定されている場合、データはSupabaseデータベースに保存されます：
 
 - 利用者マスタ: `users_master`テーブル
 - 日報データ: `daily_reports`テーブル
 - スタッフアカウント: `staff_accounts`テーブル
 - 朝礼議事録: `morning_meetings`テーブル
-- タグマスタ: `tags_master`テーブル（将来対応予定）
+- タグマスタ: `tags_master`テーブル
+- 日別利用者記録: `daily_users`テーブル
 
-**注意**: Supabaseモードでは、ローカルの`data/`ディレクトリは使用されません。データはすべてSupabaseに保存されます。
+**重要**: 
+- Supabaseモードでは、ローカルの`data/`ディレクトリは使用されません。データはすべてSupabaseに保存されます。
+- **Cloud Runにデプロイする場合は、Supabaseの使用を強く推奨します。** ローカルファイルストレージではデータが永続化されません。
+- Supabase設定方法は `SUPABASE_SETUP.md` を参照してください。
 
 ### データ保護について
 
@@ -392,13 +396,44 @@ business-management/
 - **自動バックアップ**: アプリケーション起動時に、既存データがある場合は自動的にバックアップを作成します（24時間以内にバックアップが作成されていない場合のみ）。※ローカルファイルモードのみ
 - **データマイグレーション**: スキーマバージョン管理により、データ形式が変更されても既存データを保持します。
 - **データ整合性チェック**: 起動時にデータファイルの整合性を確認し、破損が検出された場合は最新のバックアップから自動的に復元を試みます。※ローカルファイルモードのみ
-- **Supabase連携**: Supabase URL/Keyを設定すると、データはSupabaseデータベースに保存されます。クラウドデプロイ時はSupabaseの使用を強く推奨します。
+- **Supabase連携**: Supabase URL/Keyを設定すると、データはSupabaseデータベースに保存されます。**クラウドデプロイ時はSupabaseの使用を強く推奨します。** 設定方法は `SUPABASE_SETUP.md` を参照してください。
 - **手動バックアップ**: 重要なデータの場合は、外部ストレージにもバックアップを保存することを推奨します。詳細は`DATA_PROTECTION.md`を参照してください。
 - **APIキー**: APIキーは機密情報です。`.gitignore`に含まれているため、Gitリポジトリにコミットされませんが、取り扱いには注意してください。
 - **セキュリティ**: 本アプリケーションはローカル環境での使用を想定しています。本番環境で使用する場合は、適切なセキュリティ対策を実施してください。
 - **クラウドデプロイ時**: Streamlit Cloudではデータは一時的なストレージに保存されます。永続化が必要な場合は、Supabase連携またはRailway/Renderの使用を検討してください。
 
+## Supabase設定（Cloud Runデプロイ時推奨）
+
+Cloud Runにデプロイする場合、データの永続化のためにSupabaseの使用を強く推奨します。
+
+詳細な設定方法は **[SUPABASE_SETUP.md](SUPABASE_SETUP.md)** を参照してください。
+
+### クイックスタート
+
+1. [Supabase](https://supabase.com/)でプロジェクトを作成
+2. `supabase_schema.sql` をSupabase SQL Editorで実行
+3. GitHub Secretsに以下を設定:
+   - `SUPABASE_URL`: SupabaseプロジェクトURL
+   - `SUPABASE_KEY`: Supabase anon public key
+4. デプロイを実行
+
+### 接続テスト
+
+```bash
+# 環境変数を設定
+export SUPABASE_URL='https://xxxxx.supabase.co'
+export SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+
+# 検証スクリプトを実行
+python3 verify_supabase.py
+```
+
 ## トラブルシューティング
+
+### Supabase接続エラー
+
+- `SUPABASE_SETUP.md` のトラブルシューティングセクションを参照してください
+- `verify_supabase.py` を実行して設定を確認してください
 
 ### APIキーが認識されない
 - 環境変数が正しく設定されているか確認してください（Grok API、Gemini APIそれぞれ）。

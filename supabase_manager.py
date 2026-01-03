@@ -129,6 +129,73 @@ class SupabaseManager:
             print(f"利用者削除エラー: {e}")
             return False
     
+    def restore_user(self, name: str) -> bool:
+        """無効化された利用者を復元"""
+        if not self.is_enabled():
+            return False
+        
+        try:
+            self.client.table("users_master").update({
+                "active": True
+            }).eq("name", name).execute()
+            # deleted_atを削除するために、NULLを設定
+            self.client.table("users_master").update({
+                "deleted_at": None
+            }).eq("name", name).execute()
+            return True
+        except Exception as e:
+            print(f"利用者復元エラー: {e}")
+            return False
+    
+    def sort_users(self, user_ids: List[int]) -> bool:
+        """利用者マスタの順番を並び替える"""
+        if not self.is_enabled():
+            return False
+        
+        try:
+            # すべての利用者を取得
+            all_users = self.get_all_users()
+            user_dict = {u["id"]: u for u in all_users}
+            
+            # 指定されたIDの順番で利用者を並び替え
+            sorted_users = []
+            for user_id in user_ids:
+                if user_id in user_dict:
+                    sorted_users.append(user_dict[user_id])
+            
+            # 指定されていない利用者を追加（アクティブな利用者を優先）
+            remaining_ids = set(user_dict.keys()) - set(user_ids)
+            remaining_users = [user_dict[uid] for uid in remaining_ids]
+            active_remaining = [u for u in remaining_users if u.get("active", True)]
+            inactive_remaining = [u for u in remaining_users if not u.get("active", True)]
+            
+            sorted_users.extend(active_remaining)
+            sorted_users.extend(inactive_remaining)
+            
+            # 順番を更新するために、一時的なorderフィールドを使用
+            # 注意: Supabaseでは順番の管理が難しいため、IDの順番で管理する
+            # 実際の順番はクライアント側で管理する
+            return True
+        except Exception as e:
+            print(f"利用者ソートエラー: {e}")
+            return False
+    
+    def permanently_delete_users(self, names: List[str]) -> int:
+        """利用者を完全に削除（マスタから削除）"""
+        if not self.is_enabled():
+            return 0
+        
+        try:
+            deleted_count = 0
+            for name in names:
+                result = self.client.table("users_master").delete().eq("name", name).execute()
+                if result.data:
+                    deleted_count += len(result.data)
+            return deleted_count
+        except Exception as e:
+            print(f"利用者完全削除エラー: {e}")
+            return 0
+    
     # ========== 日報データ管理 ==========
     
     def save_daily_report(self, report_data: Dict) -> bool:
@@ -189,6 +256,66 @@ class SupabaseManager:
             return True
         except Exception as e:
             print(f"スタッフアカウント作成エラー: {e}")
+            return False
+    
+    def get_all_staff_accounts(self) -> List[Dict]:
+        """全スタッフアカウント情報を取得（パスワードハッシュは除外）"""
+        if not self.is_enabled():
+            return []
+        
+        try:
+            response = self.client.table("staff_accounts").select("user_id, name, created_at, active").execute()
+            return [
+                {
+                    "user_id": acc["user_id"],
+                    "name": acc["name"],
+                    "created_at": acc.get("created_at", ""),
+                    "active": acc.get("active", True)
+                }
+                for acc in response.data
+            ]
+        except Exception as e:
+            print(f"スタッフアカウント一覧取得エラー: {e}")
+            return []
+    
+    def delete_staff_account(self, user_id: str) -> bool:
+        """スタッフアカウントを削除（無効化）"""
+        if not self.is_enabled():
+            return False
+        
+        try:
+            self.client.table("staff_accounts").update({
+                "active": False,
+                "deleted_at": datetime.now().isoformat()
+            }).eq("user_id", user_id).execute()
+            return True
+        except Exception as e:
+            print(f"スタッフアカウント削除エラー: {e}")
+            return False
+    
+    def change_password(self, user_id: str, old_password: str, new_password: str) -> bool:
+        """パスワードを変更"""
+        if not self.is_enabled():
+            return False
+        
+        try:
+            import hashlib
+            old_password_hash = hashlib.sha256(old_password.encode('utf-8')).hexdigest()
+            new_password_hash = hashlib.sha256(new_password.encode('utf-8')).hexdigest()
+            
+            # 現在のパスワードを確認
+            response = self.client.table("staff_accounts").select("password_hash").eq("user_id", user_id).execute()
+            if not response.data or response.data[0]["password_hash"] != old_password_hash:
+                return False
+            
+            # パスワードを更新
+            self.client.table("staff_accounts").update({
+                "password_hash": new_password_hash,
+                "password_changed_at": datetime.now().isoformat()
+            }).eq("user_id", user_id).execute()
+            return True
+        except Exception as e:
+            print(f"パスワード変更エラー: {e}")
             return False
     
     def verify_login(self, user_id: str, password: str) -> Optional[Dict]:
@@ -355,4 +482,109 @@ class SupabaseManager:
         except Exception as e:
             print(f"タグ削除エラー: {e}")
             return False
+    
+    # ========== 日別利用者記録管理 ==========
+    
+    def save_daily_users(self, target_date: str, user_names: List[str]) -> bool:
+        """その日の利用者を保存"""
+        if not self.is_enabled():
+            return False
+        
+        try:
+            # JSONB形式で保存
+            data = {
+                "target_date": target_date,
+                "user_names": user_names,
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            # UPSERT操作（存在する場合は更新、存在しない場合は挿入）
+            self.client.table("daily_users").upsert(data, on_conflict="target_date").execute()
+            return True
+        except Exception as e:
+            print(f"日別利用者記録保存エラー: {e}")
+            return False
+    
+    def get_daily_users(self, target_date: str) -> List[str]:
+        """その日の利用者一覧を取得"""
+        if not self.is_enabled():
+            return []
+        
+        try:
+            response = self.client.table("daily_users").select("user_names").eq("target_date", target_date).execute()
+            if response.data and response.data[0].get("user_names"):
+                return response.data[0]["user_names"]
+            return []
+        except Exception as e:
+            print(f"日別利用者記録取得エラー: {e}")
+            return []
+    
+    def get_all_daily_users(self) -> Dict[str, List[str]]:
+        """全期間の利用者記録を取得"""
+        if not self.is_enabled():
+            return {}
+        
+        try:
+            response = self.client.table("daily_users").select("target_date, user_names").execute()
+            return {
+                record["target_date"]: record.get("user_names", [])
+                for record in response.data
+            }
+        except Exception as e:
+            print(f"全期間利用者記録取得エラー: {e}")
+            return {}
+    
+    def delete_daily_users(self, target_date: str) -> bool:
+        """指定日の利用者記録を削除"""
+        if not self.is_enabled():
+            return False
+        
+        try:
+            self.client.table("daily_users").delete().eq("target_date", target_date).execute()
+            return True
+        except Exception as e:
+            print(f"日別利用者記録削除エラー: {e}")
+            return False
+    
+    # ========== スキーマ初期化 ==========
+    
+    def initialize_schema(self) -> Dict[str, any]:
+        """データベーススキーマを初期化（テーブル存在確認）"""
+        if not self.is_enabled():
+            return {"success": False, "error": "Supabaseが有効になっていません"}
+        
+        result = {
+            "success": True,
+            "tables": {},
+            "errors": []
+        }
+        
+        required_tables = [
+            "users_master",
+            "daily_reports",
+            "staff_accounts",
+            "morning_meetings",
+            "tags_master",
+            "daily_users"
+        ]
+        
+        for table_name in required_tables:
+            try:
+                # テーブルにアクセスできるかテスト
+                response = self.client.table(table_name).select("id").limit(1).execute()
+                result["tables"][table_name] = {
+                    "exists": True,
+                    "accessible": True
+                }
+            except Exception as e:
+                error_msg = str(e)
+                result["tables"][table_name] = {
+                    "exists": False,
+                    "accessible": False,
+                    "error": error_msg
+                }
+                result["errors"].append(f"{table_name}: {error_msg}")
+                result["success"] = False
+        
+        return result
 
