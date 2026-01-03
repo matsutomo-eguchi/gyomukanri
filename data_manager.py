@@ -1409,9 +1409,22 @@ class DataManager:
     def _load_morning_meetings(self) -> List[Dict]:
         """朝礼議事録を読み込む"""
         try:
+            if not self.morning_meeting_file.exists():
+                print(f"朝礼議事録ファイル不存在: {self.morning_meeting_file}")
+                return []
+
             with open(self.morning_meeting_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                print(f"朝礼議事録読み込み成功: {len(data)}件")
+                return data
         except FileNotFoundError:
+            print(f"朝礼議事録ファイルが見つからない: {self.morning_meeting_file}")
+            return []
+        except json.JSONDecodeError as e:
+            print(f"朝礼議事録JSON解析エラー: {e}")
+            return []
+        except Exception as e:
+            print(f"朝礼議事録読み込みエラー: {e}")
             return []
     
     def _save_morning_meetings(self, meetings: List[Dict]):
@@ -1566,20 +1579,29 @@ class DataManager:
     def get_morning_meetings(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict]:
         """
         朝礼議事録を取得
-        
+
         Args:
             start_date: 開始日（YYYY-MM-DD形式）
             end_date: 終了日（YYYY-MM-DD形式）
-            
+
         Returns:
             朝礼議事録のリスト
         """
+        print(f"朝礼議事録取得開始 - Supabase有効: {self._is_supabase_enabled()}, 開始日: {start_date}, 終了日: {end_date}")
+
         if self._is_supabase_enabled():
-            return self.supabase_manager.get_morning_meetings(start_date, end_date)
-        
+            print("Supabaseから議事録を取得")
+            result = self.supabase_manager.get_morning_meetings(start_date, end_date)
+            print(f"Supabase取得結果: {len(result)}件")
+            return result
+
+        print("ローカルファイルから議事録を取得")
         meetings = self._load_morning_meetings()
-        
+
+        print(f"読み込み完了: {len(meetings)}件の議事録")
+
         if start_date or end_date:
+            print(f"日付フィルタリング適用 - 開始日: {start_date}, 終了日: {end_date}")
             filtered_meetings = []
             for meeting in meetings:
                 meeting_date = meeting.get("日付", "")
@@ -1597,8 +1619,10 @@ class DataManager:
                         filtered_meetings.append(meeting)
                     except:
                         continue
+            print(f"フィルタリング結果: {len(filtered_meetings)}件")
             return filtered_meetings
-        
+
+        print(f"フィルタリングなし: {len(meetings)}件")
         return meetings
     
     def delete_morning_meeting(self, meeting_id: str) -> bool:

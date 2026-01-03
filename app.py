@@ -4,6 +4,7 @@ Streamlitアプリケーション
 """
 import streamlit as st
 import os
+import json
 from datetime import date, datetime, time
 from typing import Dict, List, Optional
 from pathlib import Path
@@ -3466,7 +3467,13 @@ def render_morning_meeting():
     
     with tab2:
         st.markdown('<div class="section-header">📚 朝礼議事録一覧</div>', unsafe_allow_html=True)
-        
+
+        # デバッグモードトグル
+        debug_mode = st.checkbox("🔧 デバッグモード（開発者向け）", key="debug_mode", help="詳細なデバッグ情報とトラブルシューティング情報を表示します")
+
+        # 強制ローカル読み込みオプション
+        force_local = st.checkbox("📁 強制ローカル読み込み", key="force_local", help="Supabaseが有効でもローカルファイルからデータを読み込みます")
+
         dm = st.session_state.data_manager
         
         # メソッドの存在確認
@@ -3494,32 +3501,124 @@ def render_morning_meeting():
         end_date_str = filter_end_date.isoformat() if filter_end_date else None
         
         try:
-            meetings = dm.get_morning_meetings(start_date_str, end_date_str)
+            # デバッグ情報表示
+            if debug_mode:
+                st.info("🔍 **デバッグ情報**")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"Supabase有効: {dm._is_supabase_enabled()}")
+                    st.write(f"強制ローカル: {force_local}")
+                with col2:
+                    st.write(f"開始日フィルタ: {start_date_str}")
+                    st.write(f"終了日フィルタ: {end_date_str}")
+
+            # データ取得（強制ローカルオプション対応）
+            if force_local:
+                meetings = dm._load_morning_meetings()
+                # 日付フィルタリングを手動適用
+                if start_date_str or end_date_str:
+                    from datetime import datetime
+                    filtered_meetings = []
+                    for meeting in meetings:
+                        meeting_date = meeting.get("日付", "")
+                        if isinstance(meeting_date, str):
+                            try:
+                                meeting_date_obj = datetime.fromisoformat(meeting_date).date()
+                                if start_date_str:
+                                    start_date_obj = datetime.fromisoformat(start_date_str).date()
+                                    if meeting_date_obj < start_date_obj:
+                                        continue
+                                if end_date_str:
+                                    end_date_obj = datetime.fromisoformat(end_date_str).date()
+                                    if meeting_date_obj > end_date_obj:
+                                        continue
+                                filtered_meetings.append(meeting)
+                            except:
+                                continue
+                    meetings = filtered_meetings
+            else:
+                meetings = dm.get_morning_meetings(start_date_str, end_date_str)
+
+            # データ取得結果のデバッグ
+            if st.session_state.get("debug_mode", False):
+                st.write(f"取得した議事録件数: {len(meetings)}")
+                if meetings:
+                    st.write("最初の議事録のサンプル:")
+                    st.json(meetings[0])
+
         except AttributeError as e:
             st.error(f"エラー: get_morning_meetings メソッドの呼び出しに失敗しました: {str(e)}")
             st.info("DataManagerクラスにget_morning_meetingsメソッドが存在するか確認してください。")
             st.stop()
         except Exception as e:
             st.error(f"エラー: 朝礼議事録の取得に失敗しました: {str(e)}")
+            # 詳細なエラー情報表示
+            if st.session_state.get("debug_mode", False):
+                import traceback
+                st.code(traceback.format_exc())
             st.stop()
         
         if not meetings:
             st.info("朝礼議事録が登録されていません。")
-            # デバッグ情報
+
+            # デバッグ情報とトラブルシューティング
             if st.session_state.get("debug_mode", False):
-                st.info("デバッグ: Supabase有効状態: " + ("有効" if dm._is_supabase_enabled() else "無効"))
-                try:
-                    import os
-                    meeting_file = dm.data_dir / "morning_meetings.json"
-                    if meeting_file.exists():
-                        st.info(f"デバッグ: ファイル存在 - {meeting_file}")
-                        with open(meeting_file, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            st.code(f"ファイル内容:\n{content}")
-                    else:
-                        st.warning(f"デバッグ: ファイル不存在 - {meeting_file}")
-                except Exception as e:
-                    st.error(f"デバッグ情報取得エラー: {e}")
+                st.warning("🔧 **トラブルシューティング情報**")
+
+                # Supabase状態確認
+                is_supabase_enabled = dm._is_supabase_enabled()
+                st.write(f"**Supabase有効状態**: {'有効' if is_supabase_enabled else '無効'}")
+
+                if is_supabase_enabled:
+                    st.info("💡 **Supabaseが有効な場合**: Supabaseデータベースからデータを取得しています。Supabaseにデータが存在するか確認してください。")
+                else:
+                    st.info("💡 **ローカル保存の場合**: morning_meetings.jsonファイルからデータを読み込んでいます。")
+
+                    # ローカルファイル確認
+                    try:
+                        meeting_file = dm.data_dir / "morning_meetings.json"
+                        st.write(f"**ファイルパス**: {meeting_file}")
+
+                        if meeting_file.exists():
+                            st.success(f"✅ ファイルは存在します")
+
+                            # ファイルサイズ確認
+                            file_size = meeting_file.stat().st_size
+                            st.write(f"**ファイルサイズ**: {file_size} bytes")
+
+                            # ファイル内容確認
+                            with open(meeting_file, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                st.write("**ファイル内容**:")
+                                st.code(content, language='json')
+
+                                # JSONとして読み込みテスト
+                                try:
+                                    data = json.loads(content)
+                                    st.success(f"✅ JSON形式は正しい（{len(data)}件のデータ）")
+                                except json.JSONDecodeError as e:
+                                    st.error(f"❌ JSON形式エラー: {e}")
+
+                        else:
+                            st.error(f"❌ ファイルが存在しません: {meeting_file}")
+                            st.info("💡 **対処法**: ファイルが存在しない場合は、議事録入力でデータを保存してください。")
+
+                    except Exception as e:
+                        st.error(f"❌ ファイル確認エラー: {e}")
+
+                # 強制ローカル読み込みテスト
+                st.markdown("---")
+                if st.button("🔄 ローカルファイルから強制読み込みテスト", key="force_local_test"):
+                    try:
+                        local_meetings = dm._load_morning_meetings()
+                        st.write(f"**直接読み込み結果**: {len(local_meetings)}件")
+                        if local_meetings:
+                            st.success("✅ ローカルファイルからの読み込みは成功しています")
+                            st.json(local_meetings[0])
+                        else:
+                            st.warning("⚠️ ローカルファイルは空です")
+                    except Exception as e:
+                        st.error(f"❌ 直接読み込みエラー: {e}")
         else:
             st.markdown(f"**{len(meetings)}件の議事録が見つかりました**")
             
