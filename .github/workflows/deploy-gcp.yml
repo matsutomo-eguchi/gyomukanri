@@ -69,39 +69,43 @@ jobs:
             pip install supabase>=2.0.0
           fi
 
-      # Supabase connection test - Temporarily disabled to allow deployment
-      # - name: Test Supabase connection
-      #   continue-on-error: true
-      #   env:
-      #     SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      #     SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-      #   run: |
-      #     if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
-      #       echo "Testing Supabase connection..."
-      #       # シンプルな接続テスト
-      #       if python3 -c "
-      # import os, sys
-      # try:
-      #     from supabase import create_client
-      #     url = os.getenv('SUPABASE_URL')
-      #     key = os.getenv('SUPABASE_KEY')
-      #     if not url or not key:
-      #         print('❌ 環境変数なし')
-      #         sys.exit(1)
-      #     client = create_client(url, key)
-      #     client.table('staff_accounts').select('id').limit(1).execute()
-      #     print('✅ 接続成功')
-      # except Exception as e:
-      #     print('❌ 接続失敗:', str(e)[:100])
-      #     sys.exit(1)
-      #         "; then
-      #           echo "Supabase test passed"
-      #         else
-      #           echo "::warning::Supabase test failed, but continuing with deployment"
-      #         fi
-      #     else
-      #       echo "Supabase credentials not set, skipping test"
-      #     fi
+      - name: Test Supabase connection
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
+            echo "Testing Supabase connection..."
+
+            # Supabase接続テスト（シンプル版）
+            python3 -c "
+import os
+import sys
+try:
+    from supabase import create_client
+    supabase_url = os.getenv('SUPABASE_URL')
+    supabase_key = os.getenv('SUPABASE_KEY')
+    if not supabase_url or not supabase_key:
+        print('❌ Supabase環境変数が設定されていません')
+        sys.exit(1)
+    print('🔗 Supabase URL: ' + supabase_url[:50] + '...')
+    client = create_client(supabase_url, supabase_key)
+    print('✓ Supabaseクライアントを作成しました')
+    # 簡単なテーブルテスト
+    response = client.table('staff_accounts').select('id').limit(1).execute()
+    print('✅ Supabase接続テスト成功！')
+except Exception as e:
+    print('❌ Supabase接続エラー: ' + str(e))
+    sys.exit(1)
+            "
+              echo "Supabase connection test completed successfully"
+            else
+              echo "::error::Supabase接続テストに失敗しました。デプロイを続行しますが、アプリケーションが正常に動作しない可能性があります。"
+              echo "::warning::Supabase設定を確認してください。詳細は上記のエラーメッセージを参照してください。"
+            fi
+          else
+            echo "Supabase credentials not set, skipping connection test"
+          fi
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2

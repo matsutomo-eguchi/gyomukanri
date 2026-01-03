@@ -63,15 +63,14 @@ echo ""
 echo -e "${RED}⚠ 重要: このJSON全体をコピーしてください（{ から } まで）${NC}"
 echo ""
 
-# その他のSecrets
+# その他のSecrets（手動入力が必要）
 echo -e "${YELLOW}3. SUPABASE_URL${NC}"
 echo -e "${BLUE}説明: Supabase Settings → API → Project URL${NC}"
-echo -e "${GREEN}値: https://xfjzdzpidfdndjjekshz.supabase.co${NC}"
+echo -e "${BLUE}例: https://xxxxx.supabase.co${NC}"
 echo ""
 
 echo -e "${YELLOW}4. SUPABASE_KEY${NC}"
 echo -e "${BLUE}説明: Supabase Settings → API → anon public key${NC}"
-echo -e "${GREEN}値: sb_publishable_38ezeN9ahUqpUtn2UXcMGw_MIqSxAzD${NC}"
 echo ""
 
 echo -e "${YELLOW}5. GROK_API_KEY（オプション）${NC}"
@@ -99,8 +98,8 @@ if command -v gh &> /dev/null; then
     echo "  # Secretsを設定"
     echo "  gh secret set GCP_PROJECT_ID --body \"${PROJECT_ID}\""
     echo "  gh secret set GCP_SA_KEY < ${KEY_FILE}"
-    echo "  gh secret set SUPABASE_URL --body \"https://xfjzdzpidfdndjjekshz.supabase.co\""
-    echo "  gh secret set SUPABASE_KEY --body \"sb_publishable_38ezeN9ahUqpUtn2UXcMGw_MIqSxAzD\""
+    echo "  gh secret set SUPABASE_URL"
+    echo "  gh secret set SUPABASE_KEY"
     echo "  gh secret set GROK_API_KEY  # オプション"
     echo "  gh secret set GEMINI_API_KEY  # オプション"
     echo ""
@@ -160,16 +159,11 @@ if command -v gh &> /dev/null; then
             echo "GCP_SA_KEYを設定中..."
             gh secret set GCP_SA_KEY < "${KEY_FILE}"
             echo ""
+            echo -e "${GREEN}✓ 基本的なSecretsを設定しました${NC}"
             echo ""
-            echo "SUPABASE_URLを設定中..."
-            echo "https://xfjzdzpidfdndjjekshz.supabase.co" | gh secret set SUPABASE_URL
-            echo ""
-            echo "SUPABASE_KEYを設定中..."
-            echo "sb_publishable_38ezeN9ahUqpUtn2UXcMGw_MIqSxAzD" | gh secret set SUPABASE_KEY
-            echo ""
-            echo -e "${GREEN}✓ すべてのSupabase Secretsを設定しました${NC}"
-            echo ""
-            echo -e "${YELLOW}オプションのSecrets（AI APIキー等）は必要に応じて設定してください:${NC}"
+            echo -e "${YELLOW}残りのSecrets（SUPABASE_URL, SUPABASE_KEY等）は手動で設定してください:${NC}"
+            echo "  gh secret set SUPABASE_URL"
+            echo "  gh secret set SUPABASE_KEY"
             echo "  gh secret set GROK_API_KEY  # オプション"
             echo "  gh secret set GEMINI_API_KEY  # オプション"
         else
