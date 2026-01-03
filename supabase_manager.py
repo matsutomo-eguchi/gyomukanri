@@ -201,14 +201,43 @@ class SupabaseManager:
     def save_daily_report(self, report_data: Dict) -> bool:
         """日報データを保存"""
         if not self.is_enabled():
+            print("❌ Supabaseが有効になっていません")
             return False
-        
+
         try:
+            print("Supabase日報保存開始...")
             report_data["created_at"] = datetime.now().isoformat()
-            self.client.table("daily_reports").insert(report_data).execute()
+
+            # 接続テスト
+            if not self.client:
+                print("❌ Supabaseクライアントが初期化されていません")
+                return False
+
+            print(f"データ挿入開始: table=daily_reports, スタッフ={report_data.get('記入スタッフ名', '不明')}")
+            response = self.client.table("daily_reports").insert(report_data).execute()
+            print(f"✅ Supabase保存成功: 挿入された行数={len(response.data) if response.data else 0}")
             return True
+
         except Exception as e:
-            print(f"日報保存エラー: {e}")
+            print(f"❌ Supabase日報保存エラー: {e}")
+            print(f"エラー種別: {type(e).__name__}")
+
+            # より詳細なエラー診断
+            error_str = str(e).lower()
+            if "unauthorized" in error_str or "permission denied" in error_str:
+                print("💡 権限エラー: APIキーの権限を確認してください")
+            elif "relation" in error_str and "does not exist" in error_str:
+                print("💡 テーブルエラー: daily_reportsテーブルが存在するか確認してください")
+            elif "row level security" in error_str:
+                print("💡 RLSエラー: Row Level Securityが有効になっている可能性があります")
+            elif "connection" in error_str or "timeout" in error_str:
+                print("💡 接続エラー: インターネット接続またはSupabaseサービスの状態を確認してください")
+            elif "invalid" in error_str and "key" in error_str:
+                print("💡 認証エラー: SUPABASE_KEYが正しいか確認してください")
+
+            import traceback
+            print("エラーの詳細:")
+            print(traceback.format_exc())
             return False
     
     def get_reports(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> pd.DataFrame:

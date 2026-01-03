@@ -531,48 +531,106 @@ class DataManager:
         """
         日報データを保存（CSVとMarkdown形式の両方）
         既存データは保護され、新しいデータのみ追加される
-        
+
         Args:
             report_data: 日報データの辞書
-            
+
         Returns:
             成功した場合True
         """
         try:
+            print(f"業務報告保存開始: スタッフ={report_data.get('記入スタッフ名', '不明')}, 日付={report_data.get('業務日', '不明')}")
+
             # Supabaseが有効な場合はSupabaseに保存
             if self._is_supabase_enabled():
+                print("Supabase保存モードを使用")
                 success = self.supabase_manager.save_daily_report(report_data)
-                # Markdown形式でも保存（担当利用者名または送迎区分がある場合）
-                if success and (("担当利用者名" in report_data and report_data["担当利用者名"]) or \
-                   ("送迎区分" in report_data and report_data["送迎区分"])):
-                    self._save_report_as_markdown(report_data)
-                return success
-            
+                if success:
+                    print("✅ Supabaseへの保存に成功")
+                    # Markdown形式でも保存（担当利用者名または送迎区分がある場合）
+                    if (("担当利用者名" in report_data and report_data["担当利用者名"]) or \
+                       ("送迎区分" in report_data and report_data["送迎区分"])):
+                        try:
+                            self._save_report_as_markdown(report_data)
+                            print("✅ Markdownファイルの保存にも成功")
+                        except Exception as md_error:
+                            print(f"⚠️ Markdown保存エラー（Supabase保存は成功）: {md_error}")
+                    return True
+                else:
+                    print("❌ Supabase保存に失敗 - ローカル保存にフォールバック")
+                    # Supabase保存に失敗した場合、ローカル保存にフォールバック
+                    return self._save_to_local_csv(report_data)
+
+            # ローカルファイルストレージを使用
+            print("ローカルCSV保存モードを使用")
+            return self._save_to_local_csv(report_data)
+
+        except Exception as e:
+            print(f"❌ 日報保存エラー: {e}")
+            import traceback
+            print("エラーの詳細:")
+            print(traceback.format_exc())
+            return False
+
+    def _save_to_local_csv(self, report_data: Dict) -> bool:
+        """
+        ローカルCSVファイルに日報データを保存
+
+        Args:
+            report_data: 日報データの辞書
+
+        Returns:
+            成功した場合True
+        """
+        try:
+            print(f"ローカルCSV保存開始: {self.report_file}")
+
             # CSVファイルが存在する場合は読み込み、存在しない場合は新規作成
             # 既存データは必ず保持される
             if self.report_file.exists():
+                print(f"既存CSVファイル読み込み: {self.report_file}")
                 df = pd.read_csv(self.report_file, encoding='utf-8')
+                print(f"既存データ行数: {len(df)}")
             else:
+                print(f"新規CSVファイル作成: {self.report_file}")
                 df = pd.DataFrame()
-            
+
             # タイムスタンプを追加
             report_data["created_at"] = datetime.now().isoformat()
-            
+
             # 新しい行を追加（既存データは保持）
             new_row = pd.DataFrame([report_data])
             df = pd.concat([df, new_row], ignore_index=True)
-            
+            print(f"データ追加後行数: {len(df)}")
+
             # CSV形式で保存（既存データを含む）
             df.to_csv(self.report_file, index=False, encoding='utf-8')
-            
+            print(f"✅ CSV保存成功: {self.report_file}")
+
             # Markdown形式でも保存（担当利用者名または送迎区分がある場合）
             if ("担当利用者名" in report_data and report_data["担当利用者名"]) or \
                ("送迎区分" in report_data and report_data["送迎区分"]):
-                self._save_report_as_markdown(report_data)
-            
+                try:
+                    self._save_report_as_markdown(report_data)
+                    print("✅ Markdownファイル保存成功")
+                except Exception as md_error:
+                    print(f"⚠️ Markdown保存エラー（CSV保存は成功）: {md_error}")
+
             return True
+
+        except PermissionError as e:
+            print(f"❌ ファイル権限エラー: {e}")
+            print(f"ファイルパス: {self.report_file}")
+            print("dataディレクトリの書き込み権限を確認してください")
+            return False
+        except OSError as e:
+            print(f"❌ OSエラー: {e}")
+            print("ディスク容量やファイルシステムの問題を確認してください")
+            return False
         except Exception as e:
-            print(f"日報保存エラー: {e}")
+            print(f"❌ ローカル保存エラー: {e}")
+            import traceback
+            print(traceback.format_exc())
             return False
     
     def _save_report_as_markdown(self, report_data: Dict) -> bool:

@@ -8,6 +8,9 @@
 - 🎤 **音声から議事録自動生成**
 - 🚀 **GitHub Actions自動デプロイ**（Google Cloud Run）
 - 📱 **クロスプラットフォーム対応**（macOS ARM64、Windows、Linux）
+- 🔒 **データ保護機能強化**（自動バックアップ・整合性チェック）
+- ⚡ **Python 3.13完全対応**（最新環境最適化）
+- 🛠️ **デプロイ自動化スクリプト**（GitHub Secrets設定支援）
 
 ## 機能概要
 
@@ -344,6 +347,7 @@ business-management/
 ├── setup_github_secrets.sh       # GitHub Secrets設定スクリプト
 ├── setup_github_secrets_cli.sh   # GitHub Secrets設定CLIスクリプト
 ├── run_github_secrets_setup.sh   # GitHub Secrets設定実行スクリプト
+├── SETUP_SUPABASE.sh             # Supabase自動セットアップスクリプト
 ├── github-actions-key.json       # GitHub Actions設定用キー
 ├── .github/                      # GitHub Actions設定
 │   └── workflows/
@@ -454,10 +458,11 @@ mainブランチにpushすると、GitHub Actionsが自動的にデプロイを�
 
 ## 注意事項
 
-### ⚠️ 重要なお知らせ（2025年1月）
+### ⚠️ 重要なお知らせ（2026年1月）
 
 - **Supabase推奨**: クラウドデプロイ時は**必ずSupabaseを使用してください**。ローカルファイルストレージではデータが永続化されません。
 - **GitHub Actions修正**: ワークフローで発生していたYAML構文エラーは修正済みです。最新版の`.github/workflows/deploy-gcp.yml`を使用してください。
+- **Python 3.13対応**: 最新版のPython 3.13で完全動作確認済みです。ARM64 Macや最新環境での使用を推奨します。
 
 ### データ管理
 
@@ -577,6 +582,13 @@ python3 verify_supabase.py
 このプロジェクトは内部使用を目的としています。
 
 ## 更新履歴
+
+- v2.2.0 (2026年1月): 機能安定化・ドキュメント充実版
+  - Supabase接続テストの自動化スクリプト強化
+  - GitHub Secrets設定の自動化スクリプト追加
+  - データ保護機能の強化
+  - デプロイ関連ドキュメントの拡充
+  - Python 3.13完全対応
 
 - v2.1.1 (2025年1月): GitHub Actionsワークフロー修正版
   - GitHub Actions YAML構文エラーの修正（ヒアドキュメント形式統一）

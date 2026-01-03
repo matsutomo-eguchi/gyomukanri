@@ -1342,6 +1342,13 @@ def render_daily_report_form():
     # 業務報告・共有事項
     st.markdown("---")
     st.markdown('<div class="section-header">📢 業務報告・共有事項</div>', unsafe_allow_html=True)
+
+    # 保存先情報の表示
+    is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+    if is_supabase_enabled:
+        st.info("💾 **保存先**: Supabaseデータベース（クラウド保存）")
+    else:
+        st.info("💾 **保存先**: ローカルファイル（CSV形式）")
     
     # 日報コメントセクション（フォーム外）
     st.markdown("#### 📝 日報コメント（職員の1日の振り返り）")
@@ -2055,12 +2062,58 @@ def render_daily_report_form():
                 "申し送り事項": handover,
                 "備品購入要望": request
             }
-            
-            if st.session_state.data_manager.save_daily_report(report_data):
-                st.success("✅ 業務報告を保存しました！")
-                st.balloons()
-            else:
-                st.error("保存に失敗しました。")
+
+            try:
+                success = st.session_state.data_manager.save_daily_report(report_data)
+                if success:
+                    # 保存先情報を含めた成功メッセージ
+                    is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+                    storage_type = "Supabaseデータベース" if is_supabase_enabled else "ローカルファイル"
+                    st.success(f"✅ 業務報告を保存しました！（保存先: {storage_type}）")
+                    st.balloons()
+                else:
+                    # Supabaseが有効かどうかでエラーメッセージを変更
+                    is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+                    if is_supabase_enabled:
+                        st.error("""
+                        ❌ **保存に失敗しました**
+
+                        **原因**: Supabaseデータベースへの接続に問題が発生しています。
+
+                        **対処方法**:
+                        1. インターネット接続を確認してください
+                        2. Supabaseサービスのステータスを確認してください
+                        3. 環境変数（SUPABASE_URL, SUPABASE_KEY）が正しく設定されているか確認してください
+
+                        ※ 一時的にローカル保存に切り替えることも可能です。
+                        """)
+                    else:
+                        st.error("""
+                        ❌ **保存に失敗しました**
+
+                        **原因**: ローカルファイルへの保存に失敗しました。
+
+                        **対処方法**:
+                        1. ファイルシステムの権限を確認してください
+                        2. ディスク容量が十分にあるか確認してください
+                        3. dataディレクトリの書き込み権限を確認してください
+
+                        ※ 開発者コンソールで詳細なエラーログを確認してください。
+                        """)
+            except Exception as e:
+                st.error(f"""
+                ❌ **保存中に予期しないエラーが発生しました**
+
+                **エラー詳細**: {str(e)}
+
+                **対処方法**:
+                - このエラーメッセージを開発者に報告してください
+                - ブラウザを更新して再度お試しください
+                """)
+                # エラーログを出力（デバッグ用）
+                print(f"業務報告保存エラー: {e}")
+                import traceback
+                print(traceback.format_exc())
         
         if pdf_generate:
             form_incident_toggle = st.session_state.get("incident_toggle", False)
