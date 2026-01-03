@@ -43,19 +43,38 @@ def check_supabase_package():
 def test_supabase_connection():
     """Supabase接続テスト"""
     print("\n🔍 Supabase接続テスト...")
-    
+
     try:
         from supabase import create_client
-        
+
         supabase_url = os.getenv("SUPABASE_URL")
         supabase_key = os.getenv("SUPABASE_KEY")
-        
+
         client = create_client(supabase_url, supabase_key)
         print("✓ Supabaseクライアントを作成しました")
-        
+
         return client
     except Exception as e:
-        print(f"❌ Supabase接続エラー: {e}")
+        error_msg = str(e)
+        print(f"❌ Supabase接続エラー: {error_msg}")
+
+        # より詳細なエラーメッセージ
+        if "nodename nor servname provided" in error_msg or "Name resolution failure" in error_msg:
+            print("\n💡 考えられる原因:")
+            print("1. SUPABASE_URLが正しくない（存在しないURL）")
+            print("2. インターネット接続に問題がある")
+            print("3. Supabaseプロジェクトが作成されていない")
+            print("\n🔧 解決方法:")
+            print("1. https://supabase.com でプロジェクトを作成してください")
+            print("2. Settings → API から正しいURLとキーを取得してください")
+        elif "Invalid API key" in error_msg or "unauthorized" in error_msg.lower():
+            print("\n💡 考えられる原因:")
+            print("1. SUPABASE_KEYが正しくない")
+            print("2. APIキーの権限が不足している")
+            print("\n🔧 解決方法:")
+            print("1. Supabase Dashboard → Settings → API を確認してください")
+            print("2. 'anon public' キーを使用してください")
+
         return None
 
 def test_table_access(client):
