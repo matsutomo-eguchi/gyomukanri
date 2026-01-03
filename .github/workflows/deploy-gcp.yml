@@ -32,12 +32,13 @@ jobs:
             MISSING_SECRETS+=("GCP_PROJECT_ID")
           fi
           
-          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
-            MISSING_SECRETS+=("SUPABASE_URL")
-          fi
-          
-          if [ -z "${{ secrets.SUPABASE_KEY }}" ]; then
-            MISSING_SECRETS+=("SUPABASE_KEY")
+          # Supabaseの環境変数はオプション（ローカルファイルストレージを使用する場合は不要）
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_KEY }}" ]; then
+            echo "⚠️  Supabase環境変数が設定されていません。ローカルファイルストレージを使用します。"
+            echo "⚠️  注意: Cloud Runではローカルファイルストレージのデータは永続化されません。"
+            echo "⚠️  データを永続化するには、Supabase環境変数を設定することを推奨します。"
+          else
+            echo "✓ Supabase環境変数が設定されています。データはSupabaseに保存されます。"
           fi
           
           if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
@@ -75,21 +76,44 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           # 環境変数の構築（空の値は除外）
-          ENV_VARS="SUPABASE_URL=${SUPABASE_URL},SUPABASE_KEY=${SUPABASE_KEY}"
+          ENV_VARS=""
+          
+          # Supabase環境変数（設定されている場合のみ追加）
+          if [ -n "${SUPABASE_URL}" ] && [ -n "${SUPABASE_KEY}" ]; then
+            ENV_VARS="SUPABASE_URL=${SUPABASE_URL},SUPABASE_KEY=${SUPABASE_KEY}"
+          fi
+          
+          # APIキー（設定されている場合のみ追加）
           if [ -n "${GROK_API_KEY}" ]; then
-            ENV_VARS="${ENV_VARS},GROK_API_KEY=${GROK_API_KEY}"
+            if [ -n "${ENV_VARS}" ]; then
+              ENV_VARS="${ENV_VARS},GROK_API_KEY=${GROK_API_KEY}"
+            else
+              ENV_VARS="GROK_API_KEY=${GROK_API_KEY}"
+            fi
           fi
           if [ -n "${GEMINI_API_KEY}" ]; then
-            ENV_VARS="${ENV_VARS},GEMINI_API_KEY=${GEMINI_API_KEY}"
+            if [ -n "${ENV_VARS}" ]; then
+              ENV_VARS="${ENV_VARS},GEMINI_API_KEY=${GEMINI_API_KEY}"
+            else
+              ENV_VARS="GEMINI_API_KEY=${GEMINI_API_KEY}"
+            fi
           fi
           
           echo "Setting environment variables..."
-          gcloud run deploy $SERVICE_NAME \
-            --image asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:${{ github.sha }} \
-            --region $REGION \
-            --platform managed \
-            --allow-unauthenticated \
-            --set-env-vars "$ENV_VARS"
+          if [ -n "${ENV_VARS}" ]; then
+            gcloud run deploy $SERVICE_NAME \
+              --image asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:${{ github.sha }} \
+              --region $REGION \
+              --platform managed \
+              --allow-unauthenticated \
+              --set-env-vars "$ENV_VARS"
+          else
+            gcloud run deploy $SERVICE_NAME \
+              --image asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:${{ github.sha }} \
+              --region $REGION \
+              --platform managed \
+              --allow-unauthenticated
+          fi
 
       - name: Show deployment URL
         run: |
