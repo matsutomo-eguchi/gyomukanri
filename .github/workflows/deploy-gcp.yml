@@ -20,28 +20,33 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify secrets
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
           echo "Checking required secrets..."
           MISSING_SECRETS=()
-          
-          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+
+          if [ -z "$GCP_SA_KEY" ]; then
             MISSING_SECRETS+=("GCP_SA_KEY")
           fi
-          
-          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+
+          if [ -z "$GCP_PROJECT_ID" ]; then
             MISSING_SECRETS+=("GCP_PROJECT_ID")
           fi
-          
+
           if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
             echo "::error::The following secrets are not set or are empty: ${MISSING_SECRETS[*]}"
             echo "Please set these secrets in GitHub repository settings: Settings > Secrets and variables > Actions"
             exit 1
           fi
-          
+
           echo "✓ All required secrets are properly configured"
-          
+
           # Supabase環境変数の確認
-          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_KEY }}" ]; then
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
             echo ""
             echo "⚠️  ⚠️  ⚠️  WARNING ⚠️  ⚠️  ⚠️"
             echo "⚠️  Supabase環境変数が設定されていません。"
@@ -73,7 +78,7 @@ jobs:
             echo "Testing Supabase connection..."
 
             # Pythonスクリプトを実行
-            cat << 'EOF' | python3
+            python3 - << 'EOF'
             import os
             import sys
 
@@ -141,7 +146,6 @@ jobs:
                 print('   3. APIキーに適切な権限があるか確認してください')
                 sys.exit(1)
             EOF
-          fi
 
             # Pythonスクリプトの終了コードをチェック
             if [ $? -ne 0 ]; then
@@ -179,37 +183,28 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           # 環境変数の構築（空の値は除外）
-          ENV_VARS=""
-          
+          ENV_VARS=()
+
           # Supabase環境変数（設定されている場合のみ追加）
           if [ -n "${SUPABASE_URL}" ] && [ -n "${SUPABASE_KEY}" ]; then
-            ENV_VARS="SUPABASE_URL=${SUPABASE_URL},SUPABASE_KEY=${SUPABASE_KEY}"
+            ENV_VARS+=("SUPABASE_URL=${SUPABASE_URL}")
+            ENV_VARS+=("SUPABASE_KEY=${SUPABASE_KEY}")
           fi
-          
+
           # APIキー（設定されている場合のみ追加）
-          if [ -n "${GROK_API_KEY}" ]; then
-            if [ -n "${ENV_VARS}" ]; then
-              ENV_VARS="${ENV_VARS},GROK_API_KEY=${GROK_API_KEY}"
-            else
-              ENV_VARS="GROK_API_KEY=${GROK_API_KEY}"
-            fi
-          fi
-          if [ -n "${GEMINI_API_KEY}" ]; then
-            if [ -n "${ENV_VARS}" ]; then
-              ENV_VARS="${ENV_VARS},GEMINI_API_KEY=${GEMINI_API_KEY}"
-            else
-              ENV_VARS="GEMINI_API_KEY=${GEMINI_API_KEY}"
-            fi
-          fi
-          
+          [ -n "${GROK_API_KEY}" ] && ENV_VARS+=("GROK_API_KEY=${GROK_API_KEY}")
+          [ -n "${GEMINI_API_KEY}" ] && ENV_VARS+=("GEMINI_API_KEY=${GEMINI_API_KEY}")
+
           echo "Setting environment variables..."
-          if [ -n "${ENV_VARS}" ]; then
+          if [ ${#ENV_VARS[@]} -gt 0 ]; then
+            # カンマ区切りの文字列に変換
+            ENV_VARS_STR=$(IFS=,; echo "${ENV_VARS[*]}")
             gcloud run deploy $SERVICE_NAME \
               --image asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:${{ github.sha }} \
               --region $REGION \
               --platform managed \
               --allow-unauthenticated \
-              --set-env-vars "$ENV_VARS"
+              --set-env-vars "$ENV_VARS_STR"
           else
             gcloud run deploy $SERVICE_NAME \
               --image asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:${{ github.sha }} \
