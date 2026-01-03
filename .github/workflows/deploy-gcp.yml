@@ -19,7 +19,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Verify GCP secrets
+      - name: Verify secrets
         run: |
           if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
             echo "::error::GCP_SA_KEY secret is not set or is empty"
@@ -29,7 +29,15 @@ jobs:
             echo "::error::GCP_PROJECT_ID secret is not set or is empty"
             exit 1
           fi
-          echo "✓ GCP secrets are properly configured"
+          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
+            echo "::error::SUPABASE_URL secret is not set or is empty"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SUPABASE_KEY }}" ]; then
+            echo "::error::SUPABASE_KEY secret is not set or is empty"
+            exit 1
+          fi
+          echo "✓ All required secrets are properly configured"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -51,16 +59,22 @@ jobs:
           docker push asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:${{ github.sha }}
 
       - name: Deploy to Cloud Run
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           # 環境変数の構築（空の値は除外）
-          ENV_VARS="SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}"
-          if [ -n "${{ secrets.GROK_API_KEY }}" ]; then
-            ENV_VARS="$ENV_VARS,GROK_API_KEY=${{ secrets.GROK_API_KEY }}"
+          ENV_VARS="SUPABASE_URL=${SUPABASE_URL},SUPABASE_KEY=${SUPABASE_KEY}"
+          if [ -n "${GROK_API_KEY}" ]; then
+            ENV_VARS="${ENV_VARS},GROK_API_KEY=${GROK_API_KEY}"
           fi
-          if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
-            ENV_VARS="$ENV_VARS,GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
+          if [ -n "${GEMINI_API_KEY}" ]; then
+            ENV_VARS="${ENV_VARS},GEMINI_API_KEY=${GEMINI_API_KEY}"
           fi
           
+          echo "Setting environment variables..."
           gcloud run deploy $SERVICE_NAME \
             --image asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:${{ github.sha }} \
             --region $REGION \
