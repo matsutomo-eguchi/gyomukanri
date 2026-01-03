@@ -1190,10 +1190,30 @@ class DataManager:
             認証成功時はアカウント情報の辞書、失敗時はNone
         """
         try:
-            if self._is_supabase_enabled():
-                return self.supabase_manager.verify_login(user_id, password)
+            # 入力値の検証
+            if not user_id or not password:
+                print("ユーザーIDまたはパスワードが空です。")
+                return None
             
-            accounts = self._load_staff_accounts()
+            # Supabaseが有効な場合
+            if self._is_supabase_enabled():
+                try:
+                    result = self.supabase_manager.verify_login(user_id, password)
+                    return result
+                except Exception as supabase_error:
+                    print(f"Supabaseログイン認証エラー: {supabase_error}")
+                    import traceback
+                    traceback.print_exc()
+                    raise  # エラーを上位に伝播
+            
+            # ローカルファイルストレージを使用する場合
+            try:
+                accounts = self._load_staff_accounts()
+            except Exception as load_error:
+                print(f"スタッフアカウントファイルの読み込みエラー: {load_error}")
+                import traceback
+                traceback.print_exc()
+                raise
             
             if not accounts:
                 print("スタッフアカウントが登録されていません。")
@@ -1201,24 +1221,40 @@ class DataManager:
             
             password_hash = self._hash_password(password)
             
+            # ユーザーIDで検索
+            found_user_id = False
             for account in accounts:
-                if (account["user_id"] == user_id and 
-                    account["password_hash"] == password_hash and 
-                    account.get("active", True)):
-                    # パスワードハッシュを返さない
-                    return {
-                        "user_id": account["user_id"],
-                        "name": account["name"],
-                        "created_at": account.get("created_at", "")
-                    }
+                if account.get("user_id") == user_id:
+                    found_user_id = True
+                    # activeフラグをチェック
+                    if not account.get("active", True):
+                        print(f"ユーザーID '{user_id}' のアカウントは無効化されています。")
+                        return None
+                    # パスワードをチェック
+                    if account.get("password_hash") == password_hash:
+                        print(f"✅ ログイン成功: {account.get('name', 'Unknown')} ({user_id})")
+                        return {
+                            "user_id": account["user_id"],
+                            "name": account["name"],
+                            "created_at": account.get("created_at", "")
+                        }
+                    else:
+                        print(f"ユーザーID '{user_id}' のパスワードが一致しません。")
+                        return None
             
-            print(f"ユーザーID '{user_id}' が見つからないか、パスワードが一致しません。")
+            if not found_user_id:
+                print(f"ユーザーID '{user_id}' が見つかりません。")
+                print(f"登録されているユーザーID数: {len(accounts)}")
+                if accounts:
+                    registered_ids = [acc.get("user_id", "N/A") for acc in accounts]
+                    print(f"登録されているユーザーID: {registered_ids}")
+            
             return None
         except Exception as e:
             print(f"ログイン認証処理中にエラーが発生しました: {e}")
             import traceback
             traceback.print_exc()
-            return None
+            raise  # エラーを上位に伝播して、app.pyで適切に処理できるようにする
     
     def get_all_staff_accounts(self) -> List[Dict]:
         """全スタッフアカウント情報を取得（パスワードハッシュは除外）"""

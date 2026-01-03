@@ -177,8 +177,19 @@ def render_login_page():
     with col2:
         st.markdown("---")
         
+        # data_managerの初期化確認
+        if 'data_manager' not in st.session_state:
+            st.error("❌ データマネージャーが初期化されていません。ページを再読み込みしてください。")
+            return
+        
         # 接続状態の表示（デバッグ用）
-        is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+        try:
+            is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+        except Exception as e:
+            st.error(f"❌ データマネージャーの接続状態確認中にエラーが発生しました: {str(e)}")
+            st.exception(e)
+            is_supabase_enabled = False
+        
         if is_supabase_enabled:
             st.info("🔗 Supabaseデータベースに接続しています")
             
@@ -235,10 +246,45 @@ def render_login_page():
                     st.error("ユーザーIDとパスワードを入力してください")
                 else:
                     try:
-                        # Supabase接続状態を確認
-                        is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+                        # data_managerの確認
+                        if 'data_manager' not in st.session_state:
+                            st.error("❌ データマネージャーが初期化されていません。ページを再読み込みしてください。")
+                            return
                         
-                        account = st.session_state.data_manager.verify_login(user_id, password)
+                        # Supabase接続状態を確認
+                        try:
+                            is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+                        except Exception as e:
+                            st.warning(f"⚠️ 接続状態の確認中にエラーが発生しました: {str(e)}")
+                            is_supabase_enabled = False
+                        
+                        # ログイン試行
+                        account = None
+                        try:
+                            account = st.session_state.data_manager.verify_login(user_id, password)
+                        except Exception as login_error:
+                            error_str = str(login_error)
+                            st.error(f"❌ ログイン認証処理中にエラーが発生しました: {error_str}")
+                            
+                            # RLSエラーの場合、特別なメッセージを表示
+                            if "Row Level Security" in error_str or "permission denied" in error_str.lower():
+                                st.warning("""
+                                ⚠️ **Row Level Security (RLS) エラーが検出されました**
+                                
+                                **解決方法:**
+                                1. Supabase Dashboard → SQL Editor を開く
+                                2. 以下のSQLを実行してください:
+                                
+                                ```sql
+                                ALTER TABLE staff_accounts DISABLE ROW LEVEL SECURITY;
+                                ```
+                                
+                                または、`supabase_schema.sql` ファイルのRLS無効化コマンドを実行してください。
+                                """)
+                            else:
+                                st.exception(login_error)
+                            return
+                        
                         if account:
                             st.session_state.logged_in = True
                             st.session_state.logged_in_user = account
@@ -248,6 +294,32 @@ def render_login_page():
                         else:
                             # より詳細なエラーメッセージ
                             error_msg = "ユーザーIDまたはパスワードが正しくありません"
+                            
+                            # デバッグ情報を追加
+                            debug_info = []
+                            if is_supabase_enabled:
+                                debug_info.append("🔗 Supabaseデータベースを使用しています")
+                                try:
+                                    # データベース内のアカウント数を確認
+                                    test_result = st.session_state.data_manager.supabase_manager.test_connection()
+                                    if test_result.get("connected"):
+                                        debug_info.append(f"📊 データベース内のアカウント数: {test_result.get('account_count', 0)}")
+                                except Exception as debug_error:
+                                    debug_info.append(f"⚠️ デバッグ情報取得エラー: {str(debug_error)}")
+                            else:
+                                debug_info.append("📁 ローカルファイルストレージを使用しています")
+                                try:
+                                    # get_all_staff_accounts()を使用（パブリックメソッド）
+                                    accounts = st.session_state.data_manager.get_all_staff_accounts()
+                                    debug_info.append(f"📊 ローカルアカウント数: {len(accounts) if accounts else 0}")
+                                    if accounts:
+                                        user_ids = [acc.get("user_id", "N/A") for acc in accounts]
+                                        debug_info.append(f"登録されているユーザーID: {', '.join(user_ids)}")
+                                except Exception as debug_error:
+                                    debug_info.append(f"⚠️ デバッグ情報取得エラー: {str(debug_error)}")
+                            
+                            error_msg += "\n\n" + "\n".join(debug_info)
+                            
                             if is_supabase_enabled:
                                 error_msg += "\n\n💡 ヒント:"
                                 error_msg += "\n- Supabaseデータベースにアカウントが存在するか確認してください"
@@ -258,25 +330,8 @@ def render_login_page():
                             st.error(error_msg)
                     except Exception as e:
                         error_str = str(e)
-                        st.error(f"ログイン処理中にエラーが発生しました: {error_str}")
-                        
-                        # RLSエラーの場合、特別なメッセージを表示
-                        if "Row Level Security" in error_str or "permission denied" in error_str.lower():
-                            st.warning("""
-                            ⚠️ **Row Level Security (RLS) エラーが検出されました**
-                            
-                            **解決方法:**
-                            1. Supabase Dashboard → SQL Editor を開く
-                            2. 以下のSQLを実行してください:
-                            
-                            ```sql
-                            ALTER TABLE staff_accounts DISABLE ROW LEVEL SECURITY;
-                            ```
-                            
-                            または、`supabase_schema.sql` ファイルのRLS無効化コマンドを実行してください。
-                            """)
-                        else:
-                            st.exception(e)
+                        st.error(f"❌ ログイン処理中に予期しないエラーが発生しました: {error_str}")
+                        st.exception(e)
         
         st.markdown("---")
         
@@ -3767,6 +3822,24 @@ def render_settings():
 def main():
     """メイン関数"""
     # セッション状態の初期化（初回のみ）
+    # 注意: data_managerとlogged_inはファイルのトップレベルで初期化されている
+    
+    # data_managerの初期化確認（念のため）
+    if 'data_manager' not in st.session_state:
+        try:
+            st.session_state.data_manager = DataManager()
+        except Exception as e:
+            st.error(f"❌ データマネージャーの初期化に失敗しました: {str(e)}")
+            st.exception(e)
+            return
+    
+    # logged_inの初期化確認（念のため）
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'logged_in_user' not in st.session_state:
+        st.session_state.logged_in_user = None
+    
+    # その他のセッション状態の初期化
     if 'work_date' not in st.session_state:
         st.session_state.work_date = date.today()
     if 'staff_name' not in st.session_state:
@@ -3777,7 +3850,7 @@ def main():
         st.session_state.end_time = time(17, 0)
     
     # ログイン状態をチェック
-    if not st.session_state.logged_in:
+    if not st.session_state.get('logged_in', False):
         # ログインしていない場合はログインページを表示
         render_login_page()
         return
