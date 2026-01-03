@@ -450,7 +450,7 @@ def render_sidebar():
         # ページ選択
         page = st.radio(
             "メニュー",
-            ["日報入力", "保存済み日報閲覧", "利用者記録閲覧", "朝礼議事録", "利用者マスタ管理", "設定"],
+            ["日報入力", "保存済み日報閲覧", "利用者記録閲覧", "日報コメント確認", "朝礼議事録", "利用者マスタ管理", "設定"],
             key="page_selector"
         )
         st.session_state.current_page = page
@@ -2908,6 +2908,86 @@ def render_saved_reports_viewer():
             st.error("日報ファイルの読み込みに失敗しました。")
 
 
+def render_daily_comments_viewer():
+    """日報コメント確認画面の描画"""
+    st.markdown('<div class="main-header">📝 日報コメント確認</div>', unsafe_allow_html=True)
+
+    dm = st.session_state.data_manager
+
+    # 日付フィルター
+    st.markdown('<div class="section-header">🔍 検索条件</div>', unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        filter_start_date = st.date_input(
+            "開始日",
+            value=None,
+            key="comment_filter_start_date"
+        )
+    with col2:
+        filter_end_date = st.date_input(
+            "終了日",
+            value=None,
+            key="comment_filter_end_date"
+        )
+    with col3:
+        # スタッフ名の選択肢を取得
+        all_comments = dm.get_daily_comments()
+        staff_names = list(set(comment['記入スタッフ名'] for comment in all_comments if comment['記入スタッフ名']))
+        staff_names.sort()
+
+        filter_staff = st.selectbox(
+            "スタッフ名フィルター",
+            options=["全て"] + staff_names,
+            key="comment_filter_staff"
+        )
+
+    # フィルタリング適用
+    staff_filter = None if filter_staff == "全て" else filter_staff
+    comments = dm.get_daily_comments(
+        start_date=filter_start_date if filter_start_date else None,
+        end_date=filter_end_date if filter_end_date else None,
+        staff_name=staff_filter
+    )
+
+    if not comments:
+        st.info("該当する日報コメントがありません。")
+        return
+
+    st.markdown('<div class="section-header">📋 日報コメント一覧</div>', unsafe_allow_html=True)
+    st.markdown(f"**{len(comments)}件の日報コメントが見つかりました**")
+
+    # コメント一覧を表示
+    for i, comment in enumerate(comments, 1):
+        with st.expander(f"#{i} {comment['業務日']} - {comment['記入スタッフ名']}", expanded=(i <= 3)):
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                st.markdown("**業務日:**")
+                st.write(comment['業務日'])
+                st.markdown("**記入者:**")
+                st.write(comment['記入スタッフ名'])
+                if comment['created_at']:
+                    try:
+                        created_dt = datetime.fromisoformat(comment['created_at'])
+                        st.markdown("**作成日時:**")
+                        st.write(created_dt.strftime('%Y年%m月%d日 %H:%M:%S'))
+                    except:
+                        pass
+            with col2:
+                st.markdown("**日報コメント:**")
+                # コメントを適切に表示（長い場合は折り返し）
+                if len(comment['日報コメント']) > 200:
+                    st.text_area(
+                        "コメント内容",
+                        value=comment['日報コメント'],
+                        height=150,
+                        disabled=True,
+                        key=f"comment_{i}"
+                    )
+                else:
+                    st.info(comment['日報コメント'])
+
+
 def render_daily_users_calendar():
     """利用者記録カレンダー閲覧画面の描画"""
     st.markdown('<div class="main-header">📅 利用者記録閲覧</div>', unsafe_allow_html=True)
@@ -4009,6 +4089,8 @@ def main():
             render_saved_reports_viewer()
         elif st.session_state.current_page == "利用者記録閲覧":
             render_daily_users_calendar()
+        elif st.session_state.current_page == "日報コメント確認":
+            render_daily_comments_viewer()
         elif st.session_state.current_page == "利用者マスタ管理":
             render_user_master()
         elif st.session_state.current_page == "朝礼議事録":

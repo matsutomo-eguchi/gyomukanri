@@ -1976,3 +1976,65 @@ class DataManager:
             traceback.print_exc()
             return False
 
+    def get_daily_comments(self, start_date=None, end_date=None, staff_name=None) -> List[Dict]:
+        """
+        CSVファイルから日報コメントを取得
+
+        Args:
+            start_date: 開始日（datetime.date または None）
+            end_date: 終了日（datetime.date または None）
+            staff_name: スタッフ名フィルター（Noneの場合は全て）
+
+        Returns:
+            日報コメント情報のリスト
+            各項目: {
+                '業務日': str,
+                '記入スタッフ名': str,
+                'created_at': str,
+                '日報コメント': str
+            }
+        """
+        try:
+            if not self.report_file.exists():
+                return []
+
+            # CSVファイルを読み込み
+            df = pd.read_csv(self.report_file, encoding='utf-8')
+
+            # 日報コメントが空でない行のみをフィルタリング
+            df_comments = df[df['日報コメント'].notna() & (df['日報コメント'] != '')].copy()
+
+            if df_comments.empty:
+                return []
+
+            # 日付フィルタリング
+            if start_date or end_date:
+                df_comments['業務日_dt'] = pd.to_datetime(df_comments['業務日'], errors='coerce')
+                if start_date:
+                    df_comments = df_comments[df_comments['業務日_dt'].dt.date >= start_date]
+                if end_date:
+                    df_comments = df_comments[df_comments['業務日_dt'].dt.date <= end_date]
+
+            # スタッフ名フィルタリング
+            if staff_name:
+                df_comments = df_comments[df_comments['記入スタッフ名'] == staff_name]
+
+            # 結果を辞書のリストに変換
+            comments = []
+            for _, row in df_comments.iterrows():
+                comments.append({
+                    '業務日': str(row['業務日']),
+                    '記入スタッフ名': str(row.get('記入スタッフ名', '')),
+                    'created_at': str(row.get('created_at', '')),
+                    '日報コメント': str(row['日報コメント'])
+                })
+
+            # 作成日時で降順ソート
+            comments.sort(key=lambda x: x['created_at'], reverse=True)
+
+            return comments
+
+        except Exception as e:
+            print(f"日報コメント取得エラー: {e}")
+            return []
+
