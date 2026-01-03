@@ -177,6 +177,15 @@ def render_login_page():
     with col2:
         st.markdown("---")
         
+        # 接続状態の表示（デバッグ用）
+        is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+        if is_supabase_enabled:
+            st.info("🔗 Supabaseデータベースに接続しています")
+        else:
+            st.info("📁 ローカルファイルストレージを使用しています")
+        
+        st.markdown("---")
+        
         with st.form("login_form"):
             st.markdown("#### スタッフログイン")
             
@@ -199,15 +208,28 @@ def render_login_page():
                 if not user_id or not password:
                     st.error("ユーザーIDとパスワードを入力してください")
                 else:
-                    account = st.session_state.data_manager.verify_login(user_id, password)
-                    if account:
-                        st.session_state.logged_in = True
-                        st.session_state.logged_in_user = account
-                        st.session_state.staff_name = account["name"]
-                        st.success(f"✅ {account['name']}さん、ようこそ！")
-                        st.rerun()
-                    else:
-                        st.error("ユーザーIDまたはパスワードが正しくありません")
+                    try:
+                        # Supabase接続状態を確認
+                        is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+                        
+                        account = st.session_state.data_manager.verify_login(user_id, password)
+                        if account:
+                            st.session_state.logged_in = True
+                            st.session_state.logged_in_user = account
+                            st.session_state.staff_name = account["name"]
+                            st.success(f"✅ {account['name']}さん、ようこそ！")
+                            st.rerun()
+                        else:
+                            # より詳細なエラーメッセージ
+                            error_msg = "ユーザーIDまたはパスワードが正しくありません"
+                            if is_supabase_enabled:
+                                error_msg += "\n\n💡 ヒント: Supabaseデータベースに接続しています。データベースにアカウントが存在するか確認してください。"
+                            else:
+                                error_msg += "\n\n💡 ヒント: ローカルファイルストレージを使用しています。アカウントが作成されているか確認してください。"
+                            st.error(error_msg)
+                    except Exception as e:
+                        st.error(f"ログイン処理中にエラーが発生しました: {str(e)}")
+                        st.exception(e)
         
         st.markdown("---")
         
@@ -262,15 +284,25 @@ def render_login_page():
                         for error in errors:
                             st.error(error)
                     else:
-                        if st.session_state.data_manager.create_staff_account(
-                            new_user_id.strip(),
-                            new_password,
-                            new_staff_name.strip()
-                        ):
-                            st.success(f"✅ アカウント '{new_user_id}' を作成しました！ログインしてください。")
-                            st.rerun()
-                        else:
-                            st.error("アカウント作成に失敗しました。ユーザーIDが既に使用されている可能性があります。")
+                        try:
+                            is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
+                            if st.session_state.data_manager.create_staff_account(
+                                new_user_id.strip(),
+                                new_password,
+                                new_staff_name.strip()
+                            ):
+                                st.success(f"✅ アカウント '{new_user_id}' を作成しました！ログインしてください。")
+                                st.rerun()
+                            else:
+                                error_msg = "アカウント作成に失敗しました。"
+                                if is_supabase_enabled:
+                                    error_msg += "\n\n💡 ヒント: ユーザーIDが既に使用されているか、Supabaseデータベースへの接続に問題がある可能性があります。"
+                                else:
+                                    error_msg += "\n\n💡 ヒント: ユーザーIDが既に使用されている可能性があります。"
+                                st.error(error_msg)
+                        except Exception as e:
+                            st.error(f"アカウント作成処理中にエラーが発生しました: {str(e)}")
+                            st.exception(e)
 
 
 def render_sidebar():

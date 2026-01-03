@@ -3,7 +3,7 @@ Supabase連携モジュール
 データベースへの永続化を担当
 
 Supabaseを使用してデータを保存・取得するためのモジュールです。
-環境変数からSupabaseの認証情報を取得します。
+環境変数またはStreamlit SecretsからSupabaseの認証情報を取得します。
 """
 import os
 import json
@@ -27,9 +27,21 @@ class SupabaseManager:
         self.client: Optional[Client] = None
         self.enabled = False
         
-        # 環境変数からSupabase認証情報を取得
+        # Supabase認証情報を取得（優先順位: 環境変数 > Streamlit Secrets）
         supabase_url = os.getenv("SUPABASE_URL")
         supabase_key = os.getenv("SUPABASE_KEY")
+        
+        # Streamlit Secretsから取得（環境変数がない場合）
+        if not supabase_url or not supabase_key:
+            try:
+                import streamlit as st
+                if hasattr(st, 'secrets') and hasattr(st.secrets, 'get'):
+                    if not supabase_url:
+                        supabase_url = st.secrets.get("SUPABASE_URL", None)
+                    if not supabase_key:
+                        supabase_key = st.secrets.get("SUPABASE_KEY", None)
+            except (FileNotFoundError, AttributeError, ImportError):
+                pass
         
         if not SUPABASE_AVAILABLE:
             print("Supabaseクライアントが利用できません。ローカルファイルストレージを使用します。")
@@ -44,7 +56,7 @@ class SupabaseManager:
                 print(f"Supabase接続エラー: {e}")
                 print("ローカルファイルストレージを使用します。")
         else:
-            print("Supabase認証情報が設定されていません。環境変数 SUPABASE_URL と SUPABASE_KEY を設定してください。")
+            print("Supabase認証情報が設定されていません。環境変数またはStreamlit Secretsで SUPABASE_URL と SUPABASE_KEY を設定してください。")
             print("ローカルファイルストレージを使用します。")
     
     def is_enabled(self) -> bool:
@@ -182,24 +194,36 @@ class SupabaseManager:
     def verify_login(self, user_id: str, password: str) -> Optional[Dict]:
         """ログイン認証"""
         if not self.is_enabled():
+            print("Supabaseが有効になっていません。ログイン認証をスキップします。")
             return None
         
         try:
             import hashlib
             password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
             
+            # ユーザーIDで検索
             response = self.client.table("staff_accounts").select("*").eq("user_id", user_id).eq("active", True).execute()
             
-            if response.data and response.data[0]["password_hash"] == password_hash:
-                account = response.data[0]
+            if not response.data:
+                print(f"ユーザーID '{user_id}' が見つかりません。")
+                return None
+            
+            account = response.data[0]
+            
+            # パスワードハッシュを比較
+            if account["password_hash"] == password_hash:
                 return {
                     "user_id": account["user_id"],
                     "name": account["name"],
                     "created_at": account.get("created_at", "")
                 }
-            return None
+            else:
+                print(f"ユーザーID '{user_id}' のパスワードが一致しません。")
+                return None
         except Exception as e:
             print(f"ログイン認証エラー: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     # ========== 朝礼議事録管理 ==========

@@ -1189,25 +1189,36 @@ class DataManager:
         Returns:
             認証成功時はアカウント情報の辞書、失敗時はNone
         """
-        if self._is_supabase_enabled():
-            return self.supabase_manager.verify_login(user_id, password)
-        
-        accounts = self._load_staff_accounts()
-        
-        password_hash = self._hash_password(password)
-        
-        for account in accounts:
-            if (account["user_id"] == user_id and 
-                account["password_hash"] == password_hash and 
-                account.get("active", True)):
-                # パスワードハッシュを返さない
-                return {
-                    "user_id": account["user_id"],
-                    "name": account["name"],
-                    "created_at": account.get("created_at", "")
-                }
-        
-        return None
+        try:
+            if self._is_supabase_enabled():
+                return self.supabase_manager.verify_login(user_id, password)
+            
+            accounts = self._load_staff_accounts()
+            
+            if not accounts:
+                print("スタッフアカウントが登録されていません。")
+                return None
+            
+            password_hash = self._hash_password(password)
+            
+            for account in accounts:
+                if (account["user_id"] == user_id and 
+                    account["password_hash"] == password_hash and 
+                    account.get("active", True)):
+                    # パスワードハッシュを返さない
+                    return {
+                        "user_id": account["user_id"],
+                        "name": account["name"],
+                        "created_at": account.get("created_at", "")
+                    }
+            
+            print(f"ユーザーID '{user_id}' が見つからないか、パスワードが一致しません。")
+            return None
+        except Exception as e:
+            print(f"ログイン認証処理中にエラーが発生しました: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def get_all_staff_accounts(self) -> List[Dict]:
         """全スタッフアカウント情報を取得（パスワードハッシュは除外）"""
