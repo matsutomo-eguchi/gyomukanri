@@ -3173,7 +3173,60 @@ def render_morning_meeting():
     
     with tab1:
         st.markdown('<div class="section-header">📝 朝礼議事録入力</div>', unsafe_allow_html=True)
-        
+
+        # システム状態確認とテスト機能
+        with st.expander("🔧 システム診断（開発者向け）", expanded=False):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.write("**システム状態**")
+                dm = st.session_state.data_manager
+                st.write(f"Supabase有効: {dm._is_supabase_enabled()}")
+                st.write(f"データディレクトリ: {dm.data_dir}")
+
+                meeting_file = dm.data_dir / "morning_meetings.json"
+                st.write(f"議事録ファイル: {meeting_file.name}")
+                if meeting_file.exists():
+                    st.success(f"✅ 存在 ({meeting_file.stat().st_size} bytes)")
+                else:
+                    st.error("❌ 存在しません")
+
+            with col2:
+                st.write("**クイックテスト**")
+
+                if st.button("📊 現在の議事録件数確認", key="check_meeting_count"):
+                    try:
+                        meetings = dm.get_morning_meetings()
+                        st.info(f"現在の議事録件数: {len(meetings)}件")
+                        if meetings:
+                            st.write("最新の議事録:")
+                            st.json(meetings[0])
+                    except Exception as e:
+                        st.error(f"確認エラー: {e}")
+
+                if st.button("🧪 テストデータ保存", key="save_test_data"):
+                    test_data = {
+                        "日付": date.today().isoformat(),
+                        "記入スタッフ名": st.session_state.get("staff_name", "テストユーザー"),
+                        "タイトル": "システムテストの件",
+                        "議題・内容": "システム保存機能のテスト",
+                        "決定事項": "テスト正常完了",
+                        "共有事項": "テストデータ",
+                        "その他メモ": f"テスト実行日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    }
+
+                    with st.spinner("テストデータを保存しています..."):
+                        success, error_msg = dm.save_morning_meeting(test_data)
+
+                    if success:
+                        st.success("✅ テストデータ保存成功")
+                        # 保存後の件数確認
+                        meetings_after = dm.get_morning_meetings()
+                        st.info(f"保存後の総件数: {len(meetings_after)}件")
+                    else:
+                        st.error(f"❌ テストデータ保存失敗: {error_msg}")
+                        st.code(error_msg)
+
         # 音声から議事録を生成する機能
         st.markdown("#### 🎤 音声から議事録を生成（Gemini 3 Flash Preview）")
         st.info("音声ファイルをアップロードすると、自動的に議事録を作成します。")
@@ -3408,6 +3461,16 @@ def render_morning_meeting():
                     # 最終確認: 必ず「の件」で終わることを確認（三重チェック）
                     if not final_title.endswith("の件"):
                         final_title = final_title + "の件"
+                        print(f"タイトル修正: '{final_title}'")
+
+                    # 保存前の最終データ検証
+                    print(f"最終保存データ検証: タイトル='{final_title}', 長さ={len(final_title)}")
+                    if not final_title or not final_title.strip():
+                        st.error("❌ タイトルが空です。再度お試しください。")
+                        st.stop()
+                    if not agenda or not agenda.strip():
+                        st.error("❌ 議題・内容が空です。再度お試しください。")
+                        st.stop()
                     
                     meeting_data = {
                         "日付": meeting_date.isoformat(),
@@ -3419,8 +3482,21 @@ def render_morning_meeting():
                         "その他メモ": notes if notes else ""
                     }
 
+                    # 作成データの詳細ログ出力
+                    print(f"作成された議事録データ: {meeting_data}")
+                    print(f"データ型チェック:")
+                    for key, value in meeting_data.items():
+                        print(f"  {key}: {type(value)} = {repr(value)}")
+
                     with st.spinner("議事録を保存しています..."):
+                        # 保存前に詳細ログ出力
+                        print(f"=== 議事録保存開始 ===")
+                        print(f"保存データ: {meeting_data}")
+                        print(f"Supabase有効: {st.session_state.data_manager._is_supabase_enabled()}")
+
                         success, error_message = st.session_state.data_manager.save_morning_meeting(meeting_data)
+
+                        print(f"保存結果: success={success}, error='{error_message}'")
 
                     if success:
                         st.success("✅ 朝礼議事録を保存しました！")
@@ -3446,7 +3522,7 @@ def render_morning_meeting():
                         st.rerun()
                     else:
                         st.error(f"💥 保存に失敗しました")
-                        st.warning(f"エラー内容: {error_message}")
+                        st.error(f"❌ エラー内容: {error_message}")
 
                         # エラーの種類に応じた対処法を表示
                         if "容量" in error_message:
@@ -3460,10 +3536,45 @@ def render_morning_meeting():
                         else:
                             st.info("💡 **対処法**: 一時的な問題の可能性があります。少し時間を置いて再度お試しください。それでも解決しない場合は、管理者にお問い合わせください。")
 
-                        # エラーの詳細を表示（開発時のみ）
-                        if st.session_state.get("debug_mode", False):
-                            with st.expander("詳細なエラー情報（開発者向け）"):
-                                st.code(error_message)
+                        # 常に詳細なエラー情報を表示（トラブルシューティング用）
+                        with st.expander("🔍 詳細なエラー情報（トラブルシューティング）", expanded=True):
+                            st.write("**エラーメッセージ**:")
+                            st.code(error_message)
+
+                            # システム状態の確認
+                            dm = st.session_state.data_manager
+                            col1, col2 = st.columns(2)
+
+                            with col1:
+                                st.write(f"**Supabase有効状態**: {'有効' if dm._is_supabase_enabled() else '無効'}")
+                                st.write(f"**データディレクトリ**: {dm.data_dir}")
+
+                            with col2:
+                                # ファイル状態確認
+                                meeting_file = dm.data_dir / "morning_meetings.json"
+                                st.write(f"**議事録ファイル**: {meeting_file.name}")
+                                if meeting_file.exists():
+                                    file_size = meeting_file.stat().st_size
+                                    st.write(f"**ファイルサイズ**: {file_size} bytes")
+                                    st.success("✅ ファイルは存在します")
+                                else:
+                                    st.error("❌ ファイルが存在しません")
+
+                            # 保存しようとしたデータを表示
+                            st.write("**保存しようとしたデータ**:")
+                            st.json(meeting_data)
+
+                            # 再試行ボタン
+                            if st.button("🔄 保存を再試行", key="retry_save_after_error"):
+                                with st.spinner("再試行中..."):
+                                    retry_success, retry_error = dm.save_morning_meeting(meeting_data)
+                                if retry_success:
+                                    st.success("✅ 再試行成功しました！")
+                                    st.balloons()
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ 再試行も失敗しました: {retry_error}")
+                                    st.code(f"再試行エラー詳細: {retry_error}")
     
     with tab2:
         st.markdown('<div class="section-header">📚 朝礼議事録一覧</div>', unsafe_allow_html=True)

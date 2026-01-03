@@ -23,13 +23,9 @@ from pathlib import Path
 from typing import List, Dict, Optional
 import pandas as pd
 
-# Supabase連携（オプション）
-try:
-    from supabase_manager import SupabaseManager
-    SUPABASE_AVAILABLE = True
-except ImportError:
-    SUPABASE_AVAILABLE = False
-    SupabaseManager = None
+# Supabase連携（オプション）- 遅延import
+SUPABASE_AVAILABLE = False
+SupabaseManager = None
 
 
 class DataManager:
@@ -49,14 +45,22 @@ class DataManager:
         
         # Supabase連携の初期化（環境変数が設定されている場合）
         self.supabase_manager = None
-        if SUPABASE_AVAILABLE and SupabaseManager:
-            try:
-                self.supabase_manager = SupabaseManager()
-                if self.supabase_manager.is_enabled():
-                    print("✅ Supabase連携が有効です。データはSupabaseに保存されます。")
-            except Exception as e:
-                print(f"Supabase初期化エラー: {e}")
-                print("ローカルファイルストレージを使用します。")
+        try:
+            # 遅延import
+            from supabase_manager import SupabaseManager
+            print("Supabaseマネージャーimport成功")
+            self.supabase_manager = SupabaseManager()
+            if self.supabase_manager and self.supabase_manager.is_enabled():
+                print("✅ Supabase連携が有効です。データはSupabaseに保存されます。")
+            else:
+                print("Supabaseマネージャーは初期化されましたが、無効状態です。")
+        except ImportError as e:
+            print(f"Supabaseマネージャーimport不可: {e}")
+            print("ローカルファイルストレージを使用します。")
+        except Exception as e:
+            print(f"⚠️ Supabase初期化エラー: {e}")
+            print("ローカルファイルストレージを使用します。")
+            self.supabase_manager = None
         
         # データディレクトリの保護（既存データを保持）
         self._ensure_data_directory_protected()
@@ -98,7 +102,13 @@ class DataManager:
     
     def _is_supabase_enabled(self) -> bool:
         """Supabaseが有効かどうかを返す"""
-        return self.supabase_manager is not None and self.supabase_manager.is_enabled()
+        try:
+            return (self.supabase_manager is not None and
+                   hasattr(self.supabase_manager, 'is_enabled') and
+                   self.supabase_manager.is_enabled())
+        except Exception as e:
+            print(f"Supabase状態チェックエラー: {e}")
+            return False
     
     def _ensure_data_directory_protected(self):
         """
@@ -1461,8 +1471,12 @@ class DataManager:
             return "日付の形式が正しくありません"
 
         # タイトル形式のチェック（必ず「の件」で終わる）
-        if not meeting_data["タイトル"].endswith("の件"):
+        title = meeting_data["タイトル"]
+        print(f"タイトルチェック: '{title}' (endswith 'の件': {title.endswith('の件')})")
+        if not title.endswith("の件"):
+            print(f"❌ タイトル形式エラー: '{title}' が 'の件' で終わっていません")
             return "タイトルの形式が正しくありません（必ず「の件」で終了してください）"
+        print("✅ タイトル形式OK")
 
         # フィールド長のチェック
         max_lengths = {
@@ -1492,17 +1506,24 @@ class DataManager:
         """
         try:
             # バリデーション
+            print(f"バリデーション開始 - データ: {meeting_data}")
             validation_error = self._validate_meeting_data(meeting_data)
             if validation_error:
-                print(f"朝礼議事録データバリデーションエラー: {validation_error}")
+                print(f"❌ 朝礼議事録データバリデーションエラー: {validation_error}")
+                print(f"バリデーション失敗時のデータ詳細: {meeting_data}")
                 return False, validation_error
+            print("✅ バリデーション通過")
 
             if self._is_supabase_enabled():
-                success, error_msg = self.supabase_manager.save_morning_meeting(meeting_data)
-                if not success:
-                    print(f"朝礼議事録保存エラー (Supabase): {error_msg}")
-                    return False, error_msg
-                return True, ""
+                try:
+                    success, error_msg = self.supabase_manager.save_morning_meeting(meeting_data)
+                    if not success:
+                        print(f"朝礼議事録保存エラー (Supabase): {error_msg}")
+                        return False, error_msg
+                    return True, ""
+                except Exception as e:
+                    print(f"Supabase保存呼び出しエラー: {e}")
+                    return False, f"Supabase保存エラー: {str(e)}"
 
             # ローカル保存
             try:
@@ -1590,10 +1611,14 @@ class DataManager:
         print(f"朝礼議事録取得開始 - Supabase有効: {self._is_supabase_enabled()}, 開始日: {start_date}, 終了日: {end_date}")
 
         if self._is_supabase_enabled():
-            print("Supabaseから議事録を取得")
-            result = self.supabase_manager.get_morning_meetings(start_date, end_date)
-            print(f"Supabase取得結果: {len(result)}件")
-            return result
+            try:
+                print("Supabaseから議事録を取得")
+                result = self.supabase_manager.get_morning_meetings(start_date, end_date)
+                print(f"Supabase取得結果: {len(result)}件")
+                return result
+            except Exception as e:
+                print(f"Supabase取得エラー: {e} - ローカルフォールバックを使用")
+                # Supabaseエラー時はローカルにフォールバック
 
         print("ローカルファイルから議事録を取得")
         meetings = self._load_morning_meetings()
