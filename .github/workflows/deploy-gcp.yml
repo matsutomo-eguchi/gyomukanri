@@ -78,7 +78,7 @@ jobs:
             echo "Testing Supabase connection..."
 
             # Pythonスクリプトを実行
-            python3 - << 'EOF'
+            if python3 - << 'EOF'; then
             import os
             import sys
 
@@ -146,9 +146,8 @@ jobs:
                 print('   3. APIキーに適切な権限があるか確認してください')
                 sys.exit(1)
             EOF
-
-            # Pythonスクリプトの終了コードをチェック
-            if [ $? -ne 0 ]; then
+              echo "Supabase connection test completed successfully"
+            else
               echo "::error::Supabase接続テストに失敗しました。デプロイを続行しますが、アプリケーションが正常に動作しない可能性があります。"
               echo "::warning::Supabase設定を確認してください。詳細は上記のエラーメッセージを参照してください。"
             fi
