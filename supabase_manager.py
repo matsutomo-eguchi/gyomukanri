@@ -437,18 +437,32 @@ class SupabaseManager:
     
     # ========== 朝礼議事録管理 ==========
     
-    def save_morning_meeting(self, meeting_data: Dict) -> bool:
-        """朝礼議事録を保存"""
+    def save_morning_meeting(self, meeting_data: Dict) -> tuple[bool, str]:
+        """
+        朝礼議事録を保存
+
+        Returns:
+            (成功フラグ, エラーメッセージ)
+        """
         if not self.is_enabled():
-            return False
-        
+            return False, "Supabaseが有効化されていません"
+
         try:
             meeting_data["created_at"] = datetime.now().isoformat()
-            self.client.table("morning_meetings").insert(meeting_data).execute()
-            return True
+            result = self.client.table("morning_meetings").insert(meeting_data).execute()
+
+            # Supabaseのレスポンスをチェック
+            if hasattr(result, 'data') and result.data:
+                return True, ""
+            else:
+                error_msg = "Supabaseへの保存でデータが返されませんでした"
+                print(f"朝礼議事録保存エラー: {error_msg}")
+                return False, error_msg
+
         except Exception as e:
-            print(f"朝礼議事録保存エラー: {e}")
-            return False
+            error_msg = f"Supabase保存エラー: {str(e)}"
+            print(f"朝礼議事録保存エラー: {error_msg}")
+            return False, "データベースへの保存に失敗しました。ネットワーク接続を確認してください。"
     
     def get_morning_meetings(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict]:
         """朝礼議事録を取得"""

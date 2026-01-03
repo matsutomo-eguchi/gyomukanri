@@ -3417,9 +3417,13 @@ def render_morning_meeting():
                         "共有事項": shared_items if shared_items else "",
                         "その他メモ": notes if notes else ""
                     }
-                    
-                    if st.session_state.data_manager.save_morning_meeting(meeting_data):
+
+                    with st.spinner("議事録を保存しています..."):
+                        success, error_message = st.session_state.data_manager.save_morning_meeting(meeting_data)
+
+                    if success:
                         st.success("✅ 朝礼議事録を保存しました！")
+                        st.info("📋 保存された議事録は「📚 議事録閲覧」タブから確認できます。")
                         st.balloons()
                         # セッション状態をクリア
                         if "meeting_agenda" in st.session_state:
@@ -3432,7 +3436,25 @@ def render_morning_meeting():
                             del st.session_state.meeting_notes
                         st.rerun()
                     else:
-                        st.error("保存に失敗しました。")
+                        st.error(f"💥 保存に失敗しました")
+                        st.warning(f"エラー内容: {error_message}")
+
+                        # エラーの種類に応じた対処法を表示
+                        if "容量" in error_message:
+                            st.info("💡 **対処法**: ストレージの空き容量を確保してください。不要なファイルを削除するか、管理者に連絡してください。")
+                        elif "権限" in error_message:
+                            st.info("💡 **対処法**: ファイルの書き込み権限がありません。管理者にお問い合わせください。")
+                        elif "ネットワーク" in error_message:
+                            st.info("💡 **対処法**: インターネット接続を確認してください。ネットワークが回復したら再度お試しください。")
+                        elif "データベース" in error_message:
+                            st.info("💡 **対処法**: データベース接続に問題があります。システム管理者にお問い合わせください。")
+                        else:
+                            st.info("💡 **対処法**: 一時的な問題の可能性があります。少し時間を置いて再度お試しください。それでも解決しない場合は、管理者にお問い合わせください。")
+
+                        # エラーの詳細を表示（開発時のみ）
+                        if st.session_state.get("debug_mode", False):
+                            with st.expander("詳細なエラー情報（開発者向け）"):
+                                st.code(error_message)
     
     with tab2:
         st.markdown('<div class="section-header">📚 朝礼議事録一覧</div>', unsafe_allow_html=True)

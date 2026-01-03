@@ -1418,37 +1418,151 @@ class DataManager:
         """朝礼議事録を保存する"""
         with open(self.morning_meeting_file, 'w', encoding='utf-8') as f:
             json.dump(meetings, f, ensure_ascii=False, indent=2)
+
+    def _validate_meeting_data(self, meeting_data: Dict) -> str:
+        """
+        朝礼議事録データのバリデーション
+
+        Args:
+            meeting_data: 検証する議事録データ
+
+        Returns:
+            エラーメッセージ（正常時は空文字列）
+        """
+        if not meeting_data:
+            return "議事録データが空です"
+
+        # 必須項目のチェック
+        required_fields = ["日付", "記入スタッフ名", "タイトル", "議題・内容"]
+        for field in required_fields:
+            if field not in meeting_data or not meeting_data[field]:
+                return f"必須項目 '{field}' が入力されていません"
+
+        # 日付形式のチェック
+        try:
+            date_obj = datetime.fromisoformat(meeting_data["日付"])
+            # 未来日付でないことを確認
+            if date_obj.date() > datetime.now().date():
+                return "未来の日付は指定できません"
+        except (ValueError, TypeError):
+            return "日付の形式が正しくありません"
+
+        # タイトル形式のチェック（必ず「の件」で終わる）
+        if not meeting_data["タイトル"].endswith("の件"):
+            return "タイトルの形式が正しくありません（必ず「の件」で終了してください）"
+
+        # フィールド長のチェック
+        max_lengths = {
+            "タイトル": 200,
+            "議題・内容": 5000,
+            "決定事項": 3000,
+            "共有事項": 3000,
+            "その他メモ": 3000
+        }
+
+        for field, max_length in max_lengths.items():
+            if field in meeting_data and len(str(meeting_data[field])) > max_length:
+                return f"'{field}' が長すぎます（最大{max_length}文字）"
+
+        return ""
     
-    def save_morning_meeting(self, meeting_data: Dict) -> bool:
+    def save_morning_meeting(self, meeting_data: Dict) -> tuple[bool, str]:
         """
         朝礼議事録を保存
-        
+
         Args:
             meeting_data: 朝礼議事録データの辞書
-            
+
         Returns:
-            成功した場合True
+            (成功フラグ, エラーメッセージ)
+            成功時は(True, "")、失敗時は(False, エラーメッセージ)
         """
         try:
+            # バリデーション
+            validation_error = self._validate_meeting_data(meeting_data)
+            if validation_error:
+                print(f"朝礼議事録データバリデーションエラー: {validation_error}")
+                return False, validation_error
+
             if self._is_supabase_enabled():
-                return self.supabase_manager.save_morning_meeting(meeting_data)
-            
-            meetings = self._load_morning_meetings()
-            
+                success = self.supabase_manager.save_morning_meeting(meeting_data)
+                if not success:
+                    error_msg = "Supabaseへの保存に失敗しました"
+                    print(f"朝礼議事録保存エラー (Supabase): {error_msg}")
+                    return False, error_msg
+                return True, ""
+
+            # ローカル保存
+            try:
+                meetings = self._load_morning_meetings()
+            except Exception as e:
+                error_msg = f"既存データの読み込みに失敗しました: {str(e)}"
+                print(f"朝礼議事録保存エラー (読み込み): {error_msg}")
+                return False, "データの読み込みに失敗しました。ファイルが破損している可能性があります。"
+
             # タイムスタンプを追加
             meeting_data["created_at"] = datetime.now().isoformat()
-            
+
             # 新しい議事録を追加
             meetings.append(meeting_data)
-            
+
             # 日付順にソート（新しい順）
             meetings.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-            
-            self._save_morning_meetings(meetings)
-            return True
+
+            # 保存処理（リトライ機能付き）
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # バックアップを作成
+                    if self.morning_meeting_file.exists():
+                        backup_path = self.morning_meeting_file.with_suffix('.backup')
+                        import shutil
+                        shutil.copy2(self.morning_meeting_file, backup_path)
+
+                    self._save_morning_meetings(meetings)
+
+                    # 保存成功したらバックアップを削除
+                    if backup_path.exists():
+                        backup_path.unlink()
+
+                    break  # 成功したらループを抜ける
+
+                except PermissionError:
+                    error_msg = "ファイルへの書き込み権限がありません"
+                    print(f"朝礼議事録保存エラー (権限): {error_msg}")
+                    return False, "ファイルへの保存権限がありません。管理者にお問い合わせください。"
+                except OSError as e:
+                    if "No space left on device" in str(e):
+                        error_msg = "ストレージ容量が不足しています"
+                        print(f"朝礼議事録保存エラー (容量): {error_msg}")
+                        return False, "ストレージ容量が不足しています。容量を確保してから再度お試しください。"
+                    else:
+                        if attempt < max_retries - 1:  # 最後の試行でない場合
+                            print(f"保存リトライ {attempt + 1}/{max_retries}: {str(e)}")
+                            import time
+                            time.sleep(0.5)  # 少し待ってリトライ
+                            continue
+                        error_msg = f"ファイルシステムエラー: {str(e)}"
+                        print(f"朝礼議事録保存エラー (ファイルシステム): {error_msg}")
+                        return False, "ファイルの保存中にエラーが発生しました。再度お試しください。"
+                except Exception as e:
+                    if attempt < max_retries - 1:  # 最後の試行でない場合
+                        print(f"保存リトライ {attempt + 1}/{max_retries}: {str(e)}")
+                        import time
+                        time.sleep(0.5)  # 少し待ってリトライ
+                        continue
+                    error_msg = f"保存処理中に予期しないエラーが発生しました: {str(e)}"
+                    print(f"朝礼議事録保存エラー (保存処理): {error_msg}")
+                    return False, "保存処理中にエラーが発生しました。再度お試しください。"
+
+            return True, ""
+
         except Exception as e:
-            print(f"朝礼議事録保存エラー: {e}")
-            return False
+            error_msg = f"予期しないエラーが発生しました: {str(e)}"
+            print(f"朝礼議事録保存エラー (予期しない): {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return False, "保存中に予期しないエラーが発生しました。システム管理者にお問い合わせください。"
     
     def get_morning_meetings(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict]:
         """
