@@ -2,6 +2,13 @@
 
 放課後等デイサービスのスタッフが、日々の業務内容、担当した児童の様子、送迎実績を効率的に記録・報告するためのStreamlitアプリケーションです。
 
+**✨ 最新版の特徴**:
+- 🔗 **Supabaseデータベース連携**（クラウドデプロイ対応）
+- 🤖 **AI文章生成**（Grok API + Gemini API）
+- 🎤 **音声から議事録自動生成**
+- 🚀 **GitHub Actions自動デプロイ**（Google Cloud Run）
+- 📱 **クロスプラットフォーム対応**（macOS ARM64、Windows、Linux）
+
 ## 機能概要
 
 ### 🔐 ログイン機能
@@ -47,12 +54,14 @@
 - 日報入力画面への即座反映
 
 ### 🤖 AI文章生成アシスト
-- **Grok API**: Grok-4-1-fast-reasoningモデルを使用した文章生成
+- **Grok API**: xAIの最新Grokモデルを使用した文章生成
   - キーワードや箇条書きから自然な日報文章を自動生成
   - 既存文章の改善・推敲機能
   - 事故報告・ヒヤリハット報告の文章生成
-- **Gemini API**: Gemini 3 Flash Previewを使用した音声認識と議事録生成
+  - 状況に応じた最適なモデル自動選択
+- **Gemini API**: Google Geminiを使用した音声認識と議事録生成
   - 音声ファイルから朝礼議事録を自動生成
+  - 複数形式の音声ファイル対応（MP3, WAV, M4A, OGG, FLAC, WEBM）
 
 ### 💾 データベース連携
 - **Supabase連携**（オプション）
@@ -70,8 +79,9 @@
 ## セットアップ
 
 ### 1. 必要な環境
-- Python 3.8以上（推奨: Python 3.11以上）
+- Python 3.9以上（推奨: Python 3.11以上、最新対応: Python 3.13）
 - pip（Pythonパッケージマネージャー）
+- Git（バージョン管理用、オプション）
 
 ### 2. M3 MacBook Pro (Apple Silicon) 向けセットアップ 🍎
 
@@ -301,42 +311,53 @@ Supabase URL/Keyが設定されている場合、データはSupabaseデータ�
 
 ```
 business-management/
-├── app.py                        # メインアプリケーション
-├── data_manager.py               # データ管理モジュール（Supabase連携対応）
-├── supabase_manager.py           # Supabase連携モジュール ⭐ NEW
-├── ai_helper.py                  # AI文章生成モジュール（Grok API / Gemini API）
+├── app.py                        # メインアプリケーション（Streamlit）
+├── data_manager.py               # データ管理モジュール（Supabase/ローカル両対応）
+├── supabase_manager.py           # Supabase連携モジュール
+├── ai_helper.py                  # AI文章生成モジュール（Grok/Gemini API）
 ├── accident_report_generator.py  # 事故報告書生成モジュール
 ├── hiyari_hatto_generator.py     # ヒヤリハット報告書生成モジュール
-├── requirements.txt              # 依存パッケージ
+├── requirements.txt              # 依存パッケージ（Python 3.13対応）
 ├── env_example.txt               # 環境変数サンプル
-├── Dockerfile                    # Google Cloud Run用Dockerfile ⭐ NEW
-├── cloudbuild.yaml              # Google Cloud Build設定 ⭐ NEW
-├── supabase_schema.sql          # Supabaseデータベーススキーマ ⭐ NEW
-├── verify_supabase.py           # Supabase接続検証スクリプト ⭐ NEW
+├── Dockerfile                    # Google Cloud Run用Dockerfile
+├── cloudbuild.yaml              # Google Cloud Build設定
+├── supabase_schema.sql          # Supabaseデータベーススキーマ
+├── verify_supabase.py           # Supabase接続検証スクリプト
 ├── .gitignore                    # Git除外設定
-├── .dockerignore                 # Docker除外設定 ⭐ NEW
-├── README.md                     # このファイル
+├── .dockerignore                 # Docker除外設定
+├── README.md                     # このファイル（最新版）
 ├── 仕様書.md                     # アプリケーション仕様書
+├── ヒヤリハット.html             # ヒヤリハット報告書テンプレート
+├── 事故報告書.html               # 事故報告書テンプレート
 ├── DEPLOY.md                     # デプロイ詳細ガイド
 ├── DEPLOY_QUICKSTART.md          # デプロイクイックスタートガイド
 ├── DEPLOY_CHECKLIST.md           # デプロイチェックリスト
 ├── DEPLOY_STEPS.md               # デプロイ手順詳細
-├── GOOGLE_CLOUD_DEPLOY.md        # Google Cloudデプロイガイド ⭐ NEW
+├── GOOGLE_CLOUD_DEPLOY.md        # Google Cloudデプロイガイド
 ├── DATA_PROTECTION.md            # データ保護ガイド
+├── SUPABASE_SETUP.md             # Supabase設定詳細ガイド
+├── SUPABASE_SETUP_QUICK.md       # Supabaseクイックスタートガイド
+├── SETUP_SUPABASE.sh             # Supabase自動セットアップスクリプト
 ├── GITHUB_SECRETS_SETUP.md       # GitHub Secrets設定ガイド
 ├── GITHUB_SECRETS_VALUES.md      # GitHub Secrets値の説明
 ├── deploy_setup.sh               # デプロイセットアップスクリプト
 ├── setup_github_secrets.sh       # GitHub Secrets設定スクリプト
 ├── setup_github_secrets_cli.sh   # GitHub Secrets設定CLIスクリプト
-└── run_github_secrets_setup.sh   # GitHub Secrets設定実行スクリプト
-├── .github/                      # GitHub Actions設定 ⭐ NEW
+├── run_github_secrets_setup.sh   # GitHub Secrets設定実行スクリプト
+├── github-actions-key.json       # GitHub Actions設定用キー
+├── .github/                      # GitHub Actions設定
 │   └── workflows/
 │       └── deploy-gcp.yml        # Google Cloud Run自動デプロイワークフロー
 ├── .streamlit/                   # Streamlit設定ディレクトリ（存在する場合）
 │   └── config.toml               # Streamlitパフォーマンス設定
+├── venv/                         # Python仮想環境（自動生成）
+├── __pycache__/                  # Pythonキャッシュ（自動生成）
+├── streamlit.log                 # Streamlitログファイル
+├── streamlit_output.log          # Streamlit出力ログ
 └── data/                         # データ保存ディレクトリ（自動生成、Supabase使用時は未使用）
     ├── users_master.json         # 利用者マスタ
     ├── daily_reports.csv         # 日報データ
+    ├── daily_users.json          # 日別利用者記録
     ├── tags_master.json          # タグマスタ
     ├── staff_accounts.json       # スタッフアカウント
     ├── morning_meetings.json     # 朝礼議事録
@@ -390,7 +411,7 @@ business-management/
 
 詳細は [`GOOGLE_CLOUD_DEPLOY.md`](GOOGLE_CLOUD_DEPLOY.md) の「Supabaseのセットアップ」セクションを参照してください。
 
-### GitHub Actionsによる自動デプロイ（Google Cloud Run）
+### GitHub Actionsによる自動デプロイ（Google Cloud Run）⭐ **推奨**
 
 mainブランチにpushすると、GitHub Actionsが自動的にデプロイを実行します。
 
@@ -400,8 +421,8 @@ mainブランチにpushすると、GitHub Actionsが自動的にデプロイを�
 
 - **GCP_PROJECT_ID**: Google CloudプロジェクトID
 - **GCP_SA_KEY**: Google Cloudサービスアカウントキー（JSON形式）
-- **SUPABASE_URL**: SupabaseプロジェクトURL（推奨）
-- **SUPABASE_KEY**: Supabase匿名キー（推奨）
+- **SUPABASE_URL**: SupabaseプロジェクトURL（**推奨・必須**）
+- **SUPABASE_KEY**: Supabase匿名キー（**推奨・必須**）
 - **GROK_API_KEY**: Grok APIキー（オプション）
 - **GEMINI_API_KEY**: Gemini APIキー（オプション）
 
@@ -411,10 +432,17 @@ mainブランチにpushすると、GitHub Actionsが自動的にデプロイを�
 
 1. mainブランチにコードをpush
 2. GitHub Actionsが自動的に以下を実行：
-   - Supabase接続テスト（設定されている場合）
-   - Dockerイメージのビルド
-   - Google Cloud Runへのデプロイ
+   - **Supabase接続テスト**（YAML構文修正済み、設定されている場合）
+   - 必要なテーブルアクセス確認（users_master, daily_reports, staff_accounts, morning_meetings, tags_master, daily_users）
+   - Dockerイメージのビルド（asia-northeast1リージョン）
+   - Google Cloud Runへのデプロイ（環境変数自動設定）
 3. デプロイ完了後、Cloud RunのURLが表示されます
+
+#### 最近の改善点（2025年1月）
+
+- ✅ **YAML構文エラー修正**: GitHub Actionsワークフローで発生していたヒアドキュメントの構文エラーを修正
+- ✅ **Supabase接続テスト強化**: デプロイ前に全テーブルへのアクセスを自動検証
+- ✅ **RLS設定確認**: Row Level Securityが適切に無効化されているか自動チェック
 
 ### デプロイ前の確認事項
 
@@ -426,15 +454,31 @@ mainブランチにpushすると、GitHub Actionsが自動的にデプロイを�
 
 ## 注意事項
 
+### ⚠️ 重要なお知らせ（2025年1月）
+
+- **Supabase推奨**: クラウドデプロイ時は**必ずSupabaseを使用してください**。ローカルファイルストレージではデータが永続化されません。
+- **GitHub Actions修正**: ワークフローで発生していたYAML構文エラーは修正済みです。最新版の`.github/workflows/deploy-gcp.yml`を使用してください。
+
+### データ管理
+
 - **データ保護**: アプリ更新時も過去のデータは自動的に保護されます。`data/`ディレクトリは`.gitignore`で除外されているため、Git操作でデータが失われることはありません。
 - **自動バックアップ**: アプリケーション起動時に、既存データがある場合は自動的にバックアップを作成します（24時間以内にバックアップが作成されていない場合のみ）。※ローカルファイルモードのみ
 - **データマイグレーション**: スキーマバージョン管理により、データ形式が変更されても既存データを保持します。
 - **データ整合性チェック**: 起動時にデータファイルの整合性を確認し、破損が検出された場合は最新のバックアップから自動的に復元を試みます。※ローカルファイルモードのみ
-- **Supabase連携**: Supabase URL/Keyを設定すると、データはSupabaseデータベースに保存されます。**クラウドデプロイ時はSupabaseの使用を強く推奨します。** 設定方法は `SUPABASE_SETUP.md` を参照してください。
-- **手動バックアップ**: 重要なデータの場合は、外部ストレージにもバックアップを保存することを推奨します。詳細は`DATA_PROTECTION.md`を参照してください。
+
+### Supabase連携（推奨）
+
+- **クラウドデプロイ必須**: Supabase URL/Keyを設定すると、データはSupabaseデータベースに保存されます。**Google Cloud Runデプロイ時はSupabaseの使用が必須です。**
+- **設定方法**: `SUPABASE_SETUP_QUICK.md`（クイックスタート）または `SUPABASE_SETUP.md`（詳細）を参照してください。
+- **接続テスト**: `verify_supabase.py` を使用してSupabase設定を確認できます。
+- **RLS設定**: SupabaseのテーブルでRow Level Securityが無効化されていることを確認してください。
+
+### セキュリティ・運用
+
 - **APIキー**: APIキーは機密情報です。`.gitignore`に含まれているため、Gitリポジトリにコミットされませんが、取り扱いには注意してください。
 - **セキュリティ**: 本アプリケーションはローカル環境での使用を想定しています。本番環境で使用する場合は、適切なセキュリティ対策を実施してください。
-- **クラウドデプロイ時**: Streamlit Cloudではデータは一時的なストレージに保存されます。永続化が必要な場合は、Supabase連携またはRailway/Renderの使用を検討してください。
+- **バックアップ**: 重要なデータの場合は、外部ストレージにもバックアップを保存することを推奨します。詳細は`DATA_PROTECTION.md`を参照してください。
+- **環境変数**: APIキーなどの機密情報は環境変数またはStreamlit Secretsで管理してください。
 
 ## Supabase設定（Cloud Runデプロイ時推奨）
 
@@ -464,19 +508,35 @@ python3 verify_supabase.py
 
 ## トラブルシューティング
 
+### GitHub Actionsワークフローエラー
+
+#### YAML構文エラー（Invalid workflow file）
+- **症状**: `You have an error in your yaml syntax on line 143` などのエラー
+- **原因**: ヒアドキュメント内のPythonコードのインデントが不正
+- **解決**: ワークフロー内のPythonスクリプト部分がrunステップのインデントレベルに統一されているか確認
+- **最新状況**: この問題は修正済み。ヒアドキュメントを適切な形式に変更
+
+#### Supabase接続テストエラー
+- **症状**: `python3 -c "` で始まるエラー
+- **原因**: シェルのヒアドキュメント構文エラー
+- **解決**: ワークフローが最新版に更新されているか確認
+- **確認方法**: `.github/workflows/deploy-gcp.yml` の76行目付近を確認
+
 ### Supabase接続エラー
 
-- `SUPABASE_SETUP.md` のトラブルシューティングセクションを参照してください
-- `verify_supabase.py` を実行して設定を確認してください：
+- **クイック診断**: `SUPABASE_SETUP_QUICK.md` を参照してください
+- **詳細診断**: `SUPABASE_SETUP.md` のトラブルシューティングセクションを参照してください
+- **自動検証スクリプト**:
   ```bash
   # 環境変数を設定
   export SUPABASE_URL='https://xxxxx.supabase.co'
   export SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
-  
+
   # 検証スクリプトを実行
   python3 verify_supabase.py
   ```
-- GitHub ActionsのデプロイログでSupabase接続テストの結果を確認できます
+- **GitHub Actionsログ確認**: デプロイ時のSupabase接続テスト結果を確認できます
+- **RLS設定確認**: SupabaseダッシュボードでRLSが無効化されているか確認
 
 ### APIキーが認識されない
 - 環境変数が正しく設定されているか確認してください（Grok API、Gemini APIそれぞれ）。
@@ -518,7 +578,13 @@ python3 verify_supabase.py
 
 ## 更新履歴
 
-- v2.1.0 (2025): Supabase連携・クラウドデプロイ対応版
+- v2.1.1 (2025年1月): GitHub Actionsワークフロー修正版
+  - GitHub Actions YAML構文エラーの修正（ヒアドキュメント形式統一）
+  - Supabase接続テストの安定化
+  - デプロイプロセスの信頼性向上
+  - Python 3.13対応確認
+
+- v2.1.0 (2025年1月): Supabase連携・クラウドデプロイ対応版
   - Supabaseデータベース連携機能の追加
   - Google Cloud Runデプロイ対応（Dockerfile、cloudbuild.yaml）
   - GitHub Actions CI/CD自動デプロイ機能
@@ -526,14 +592,16 @@ python3 verify_supabase.py
   - データ保存方法の選択（ローカルファイル / Supabase）
   - クラウドデプロイ時のデータ永続化対応
   - Supabase接続検証スクリプト（verify_supabase.py）の追加
+  - Supabaseクイックスタートガイドの追加
 
 - v2.0.0 (2025): 機能拡張版
   - ログイン機能の追加（スタッフアカウント管理）
   - 朝礼議事録機能の追加
-  - 音声から議事録を自動生成する機能（Gemini 3 Flash Preview）
+  - 音声から議事録を自動生成する機能（Gemini API）
   - 保存済み日報閲覧機能の追加
   - 事故報告書・ヒヤリハット報告書のAI生成機能
   - Gemini APIサポートの追加
+  - 日別利用者記録機能の追加
 
 - v1.1.0 (2024): M3 MacBook Pro最適化版
   - Apple Silicon (ARM64) ネイティブサポート
