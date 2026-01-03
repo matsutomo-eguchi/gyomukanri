@@ -3296,22 +3296,42 @@ def render_morning_meeting():
                 st.markdown("---")
                 
                 st.markdown("#### 議題・内容")
-                st.markdown(selected_meeting.get("議題・内容", ""))
+                agenda_content = selected_meeting.get("議題・内容", "")
+                if agenda_content:
+                    # 改行を保持して表示
+                    st.markdown(f'<div style="white-space: pre-wrap;">{agenda_content}</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown("")
                 
                 if selected_meeting.get("決定事項"):
                     st.markdown("---")
                     st.markdown("#### 決定事項")
-                    st.markdown(selected_meeting.get("決定事項", ""))
+                    decisions_content = selected_meeting.get("決定事項", "")
+                    if decisions_content:
+                        # 改行を保持して表示
+                        st.markdown(f'<div style="white-space: pre-wrap;">{decisions_content}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown("")
                 
                 if selected_meeting.get("共有事項"):
                     st.markdown("---")
                     st.markdown("#### 共有事項")
-                    st.markdown(selected_meeting.get("共有事項", ""))
+                    shared_content = selected_meeting.get("共有事項", "")
+                    if shared_content:
+                        # 改行を保持して表示
+                        st.markdown(f'<div style="white-space: pre-wrap;">{shared_content}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown("")
                 
                 if selected_meeting.get("その他メモ"):
                     st.markdown("---")
                     st.markdown("#### その他メモ")
-                    st.markdown(selected_meeting.get("その他メモ", ""))
+                    notes_content = selected_meeting.get("その他メモ", "")
+                    if notes_content:
+                        # 改行を保持して表示
+                        st.markdown(f'<div style="white-space: pre-wrap;">{notes_content}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown("")
                 
                 st.markdown("---")
                 
