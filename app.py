@@ -3623,7 +3623,68 @@ def render_settings():
             st.info("アカウントが登録されていません。")
         
         st.markdown("---")
-    
+
+    # Supabase接続テスト
+    st.markdown('<div class="section-header">🔗 Supabase接続テスト</div>', unsafe_allow_html=True)
+
+    # 接続テストボタン（常に表示）
+    if st.button("🔍 接続テスト", help="Supabaseへの接続をテストします", key="supabase_test_button"):
+        try:
+            test_result = st.session_state.data_manager.supabase_manager.test_connection()
+            if test_result["connected"] and test_result["table_accessible"]:
+                st.success(f"✅ 接続成功！データベース内のアカウント数: {test_result['account_count']}")
+            elif not test_result["enabled"]:
+                st.info("""
+                ℹ️ **Supabaseが設定されていません**
+
+                現在、ローカルファイルストレージを使用しています。Supabaseを使用するには:
+
+                1. [Supabase](https://supabase.com/)でプロジェクトを作成
+                2. 環境変数 `SUPABASE_URL` と `SUPABASE_KEY` を設定
+                3. `supabase_schema.sql` をSQL Editorで実行
+
+                詳細: `SUPABASE_SETUP.md` を参照してください。
+                """)
+            else:
+                error_detail = test_result.get("error", "不明なエラー")
+                st.error(f"❌ 接続エラー: {error_detail}")
+                if "Row Level Security" in error_detail or "permission denied" in error_detail.lower():
+                    st.warning("""
+                    ⚠️ **Row Level Security (RLS) が有効になっている可能性があります**
+
+                    **解決方法:**
+                    1. Supabase Dashboard → SQL Editor を開く
+                    2. 以下のSQLを実行してください:
+
+                    ```sql
+                    ALTER TABLE staff_accounts DISABLE ROW LEVEL SECURITY;
+                    ALTER TABLE users_master DISABLE ROW LEVEL SECURITY;
+                    ALTER TABLE daily_reports DISABLE ROW LEVEL SECURITY;
+                    ALTER TABLE morning_meetings DISABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tags_master DISABLE ROW LEVEL SECURITY;
+                    ALTER TABLE daily_users DISABLE ROW LEVEL SECURITY;
+                    ```
+
+                    または、`supabase_schema.sql` ファイルのRLS無効化コマンドを実行してください。
+                    """)
+                elif "nodename nor servname provided" in error_detail or "Name resolution failure" in error_detail:
+                    st.warning("""
+                    ⚠️ **Supabase URLが無効です**
+
+                    **考えられる原因:**
+                    - SUPABASE_URLが正しく設定されていない
+                    - Supabaseプロジェクトが存在しない
+
+                    **解決方法:**
+                    1. Supabaseプロジェクトを作成してください
+                    2. Settings → API から正しいURLを取得してください
+                    """)
+        except Exception as e:
+            st.error(f"❌ テスト実行中にエラーが発生しました: {str(e)}")
+            st.exception(e)
+
+    st.markdown("---")
+
     st.markdown('<div class="section-header">🔑 API設定</div>', unsafe_allow_html=True)
     
     # Grok APIキーの設定
