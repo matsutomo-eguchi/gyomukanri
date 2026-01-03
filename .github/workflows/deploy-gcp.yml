@@ -20,16 +20,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify secrets
-        env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          test -n "${GCP_SA_KEY}" || { echo "::error::GCP_SA_KEY secret is not set or is empty"; exit 1; }
-          test -n "${GCP_PROJECT_ID}" || { echo "::error::GCP_PROJECT_ID secret is not set or is empty"; exit 1; }
-          test -n "${SUPABASE_URL}" || { echo "::error::SUPABASE_URL secret is not set or is empty"; exit 1; }
-          test -n "${SUPABASE_KEY}" || { echo "::error::SUPABASE_KEY secret is not set or is empty"; exit 1; }
+          echo "Checking required secrets..."
+          MISSING_SECRETS=()
+          
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            MISSING_SECRETS+=("GCP_SA_KEY")
+          fi
+          
+          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+            MISSING_SECRETS+=("GCP_PROJECT_ID")
+          fi
+          
+          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
+            MISSING_SECRETS+=("SUPABASE_URL")
+          fi
+          
+          if [ -z "${{ secrets.SUPABASE_KEY }}" ]; then
+            MISSING_SECRETS+=("SUPABASE_KEY")
+          fi
+          
+          if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+            echo "::error::The following secrets are not set or are empty: ${MISSING_SECRETS[*]}"
+            echo "Please set these secrets in GitHub repository settings: Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+          
           echo "✓ All required secrets are properly configured"
 
       - name: Authenticate to Google Cloud
