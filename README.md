@@ -70,7 +70,7 @@
 ## セットアップ
 
 ### 1. 必要な環境
-- Python 3.8以上
+- Python 3.8以上（推奨: Python 3.11以上）
 - pip（Pythonパッケージマネージャー）
 
 ### 2. M3 MacBook Pro (Apple Silicon) 向けセットアップ 🍎
@@ -312,6 +312,7 @@ business-management/
 ├── Dockerfile                    # Google Cloud Run用Dockerfile ⭐ NEW
 ├── cloudbuild.yaml              # Google Cloud Build設定 ⭐ NEW
 ├── supabase_schema.sql          # Supabaseデータベーススキーマ ⭐ NEW
+├── verify_supabase.py           # Supabase接続検証スクリプト ⭐ NEW
 ├── .gitignore                    # Git除外設定
 ├── .dockerignore                 # Docker除外設定 ⭐ NEW
 ├── README.md                     # このファイル
@@ -360,8 +361,10 @@ business-management/
   - 本番環境向けの堅牢なデプロイ
   - Supabaseによるデータベース永続化
   - GitHub Actionsによる自動デプロイ（mainブランチへのpushで自動デプロイ）
+  - デプロイ前にSupabase接続テストを自動実行
   - スケーラブルで高可用性
   - 詳細は [`GOOGLE_CLOUD_DEPLOY.md`](GOOGLE_CLOUD_DEPLOY.md) を参照
+  - GitHub Secrets設定方法は [`GITHUB_SECRETS_SETUP.md`](GITHUB_SECRETS_SETUP.md) を参照
 - **Streamlit Cloud**（完全無料・最も簡単）
   - GitHubと連携するだけで自動デプロイ
   - データは一時的なストレージに保存（再起動で消える可能性あり）
@@ -379,16 +382,47 @@ business-management/
 
 1. **Supabaseプロジェクトの作成**: [Supabase](https://supabase.com) でプロジェクトを作成
 2. **データベーススキーマの設定**: `supabase_schema.sql` をSupabaseのSQL Editorで実行
-3. **環境変数の設定**: `SUPABASE_URL` と `SUPABASE_KEY` を設定
+3. **環境変数の設定**: 
+   - ローカル実行時: 環境変数またはアプリ内設定画面で設定
+   - Cloud Runデプロイ時: GitHub Secretsに設定（`SUPABASE_URL`、`SUPABASE_KEY`）
 4. **データの自動保存**: 設定後、すべてのデータがSupabaseに自動保存されます
+5. **接続テスト**: `verify_supabase.py` を実行して設定を確認できます
 
 詳細は [`GOOGLE_CLOUD_DEPLOY.md`](GOOGLE_CLOUD_DEPLOY.md) の「Supabaseのセットアップ」セクションを参照してください。
+
+### GitHub Actionsによる自動デプロイ（Google Cloud Run）
+
+mainブランチにpushすると、GitHub Actionsが自動的にデプロイを実行します。
+
+#### 必要なGitHub Secrets
+
+以下のSecretsをGitHubリポジトリに設定する必要があります：
+
+- **GCP_PROJECT_ID**: Google CloudプロジェクトID
+- **GCP_SA_KEY**: Google Cloudサービスアカウントキー（JSON形式）
+- **SUPABASE_URL**: SupabaseプロジェクトURL（推奨）
+- **SUPABASE_KEY**: Supabase匿名キー（推奨）
+- **GROK_API_KEY**: Grok APIキー（オプション）
+- **GEMINI_API_KEY**: Gemini APIキー（オプション）
+
+詳細な設定方法は [`GITHUB_SECRETS_SETUP.md`](GITHUB_SECRETS_SETUP.md) を参照してください。
+
+#### 自動デプロイの流れ
+
+1. mainブランチにコードをpush
+2. GitHub Actionsが自動的に以下を実行：
+   - Supabase接続テスト（設定されている場合）
+   - Dockerイメージのビルド
+   - Google Cloud Runへのデプロイ
+3. デプロイ完了後、Cloud RunのURLが表示されます
 
 ### デプロイ前の確認事項
 
 - [ ] `requirements.txt` が最新である
 - [ ] `.gitignore` に機密情報が含まれていない
 - [ ] APIキーがコードに直接書かれていない
+- [ ] GitHub Secretsが正しく設定されている（Cloud Runデプロイの場合）
+- [ ] Supabaseスキーマが適用されている（Supabase使用の場合）
 
 ## 注意事項
 
@@ -433,7 +467,16 @@ python3 verify_supabase.py
 ### Supabase接続エラー
 
 - `SUPABASE_SETUP.md` のトラブルシューティングセクションを参照してください
-- `verify_supabase.py` を実行して設定を確認してください
+- `verify_supabase.py` を実行して設定を確認してください：
+  ```bash
+  # 環境変数を設定
+  export SUPABASE_URL='https://xxxxx.supabase.co'
+  export SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+  
+  # 検証スクリプトを実行
+  python3 verify_supabase.py
+  ```
+- GitHub ActionsのデプロイログでSupabase接続テストの結果を確認できます
 
 ### APIキーが認識されない
 - 環境変数が正しく設定されているか確認してください（Grok API、Gemini APIそれぞれ）。
@@ -479,8 +522,10 @@ python3 verify_supabase.py
   - Supabaseデータベース連携機能の追加
   - Google Cloud Runデプロイ対応（Dockerfile、cloudbuild.yaml）
   - GitHub Actions CI/CD自動デプロイ機能
+  - デプロイ前のSupabase接続テスト自動実行
   - データ保存方法の選択（ローカルファイル / Supabase）
   - クラウドデプロイ時のデータ永続化対応
+  - Supabase接続検証スクリプト（verify_supabase.py）の追加
 
 - v2.0.0 (2025): 機能拡張版
   - ログイン機能の追加（スタッフアカウント管理）
