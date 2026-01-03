@@ -54,8 +54,16 @@
 - **Gemini API**: Gemini 3 Flash Previewを使用した音声認識と議事録生成
   - 音声ファイルから朝礼議事録を自動生成
 
+### 💾 データベース連携
+- **Supabase連携**（オプション）
+  - Supabase URL/Keyを設定すると、データがSupabaseデータベースに保存されます
+  - ローカルファイル（`data/`ディレクトリ）とSupabaseの両方に対応
+  - クラウドデプロイ時はSupabaseを使用することでデータの永続化が可能
+  - 詳細は [`GOOGLE_CLOUD_DEPLOY.md`](GOOGLE_CLOUD_DEPLOY.md) を参照
+
 ### ⚙️ 設定
 - APIキー管理（Grok API、Gemini API）
+- Supabase連携設定（URL/Key）
 - データエクスポート（CSV形式）
 - 日報データの確認
 
@@ -178,7 +186,11 @@ SUPABASE_KEY = "your_supabase_key"  # Supabase連携用（オプション）
 **環境変数の用途**:
 - **Grok API**: 日報文章生成、事故報告・ヒヤリハット報告の文章生成に使用
 - **Gemini API**: 音声から朝礼議事録を自動生成する機能に使用（オプション）
-- **Supabase URL/Key**: Supabaseデータベース連携用（設定するとデータがSupabaseに保存されます）
+- **Supabase URL**: SupabaseプロジェクトのURL（例: `https://xxxxx.supabase.co`）
+- **Supabase Key**: Supabaseプロジェクトの匿名キー（anon/public key）
+  - Supabase URL/Keyを設定すると、データがSupabaseデータベースに保存されます
+  - クラウドデプロイ時はSupabaseを使用することでデータの永続化が可能
+  - 詳細は [`GOOGLE_CLOUD_DEPLOY.md`](GOOGLE_CLOUD_DEPLOY.md) を参照
 
 ### 4. アプリケーションの起動
 
@@ -230,6 +242,9 @@ streamlit run app.py
 
 ### データの保存場所
 
+#### ローカルファイルモード（デフォルト）
+Supabase URL/Keyが設定されていない場合、データはローカルファイルに保存されます：
+
 - 利用者マスタ: `data/users_master.json`
 - 日報データ: `data/daily_reports.csv`
 - タグマスタ: `data/tags_master.json`
@@ -238,6 +253,17 @@ streamlit run app.py
 - 設定ファイル: `data/config.json`
 - 日報Markdownファイル: `data/reports/`
 - バックアップ: `data/backups/`
+
+#### Supabaseモード（オプション）
+Supabase URL/Keyが設定されている場合、データはSupabaseデータベースに保存されます：
+
+- 利用者マスタ: `users_master`テーブル
+- 日報データ: `daily_reports`テーブル
+- スタッフアカウント: `staff_accounts`テーブル
+- 朝礼議事録: `morning_meetings`テーブル
+- タグマスタ: `tags_master`テーブル（将来対応予定）
+
+**注意**: Supabaseモードでは、ローカルの`data/`ディレクトリは使用されません。データはすべてSupabaseに保存されます。
 
 ### データ保護について
 
@@ -289,7 +315,15 @@ business-management/
 ├── DEPLOY.md                     # デプロイ詳細ガイド
 ├── DEPLOY_QUICKSTART.md          # デプロイクイックスタートガイド
 ├── DEPLOY_CHECKLIST.md           # デプロイチェックリスト
+├── DEPLOY_STEPS.md               # デプロイ手順詳細
 ├── GOOGLE_CLOUD_DEPLOY.md        # Google Cloudデプロイガイド ⭐ NEW
+├── DATA_PROTECTION.md            # データ保護ガイド
+├── GITHUB_SECRETS_SETUP.md       # GitHub Secrets設定ガイド
+├── GITHUB_SECRETS_VALUES.md      # GitHub Secrets値の説明
+├── deploy_setup.sh               # デプロイセットアップスクリプト
+├── setup_github_secrets.sh       # GitHub Secrets設定スクリプト
+├── setup_github_secrets_cli.sh   # GitHub Secrets設定CLIスクリプト
+└── run_github_secrets_setup.sh   # GitHub Secrets設定実行スクリプト
 ├── .github/                      # GitHub Actions設定 ⭐ NEW
 │   └── workflows/
 │       └── deploy-gcp.yml        # Google Cloud Run自動デプロイワークフロー
@@ -318,16 +352,33 @@ business-management/
 
 以下のデプロイ方法が利用可能です：
 
-- **Google Cloud Run**（推奨・Supabase連携・GitHub Actions CI/CD）⭐ **NEW**
+- **Google Cloud Run**（推奨・Supabase連携・GitHub Actions CI/CD）⭐ **推奨**
   - 本番環境向けの堅牢なデプロイ
   - Supabaseによるデータベース永続化
-  - GitHub Actionsによる自動デプロイ
+  - GitHub Actionsによる自動デプロイ（mainブランチへのpushで自動デプロイ）
+  - スケーラブルで高可用性
   - 詳細は [`GOOGLE_CLOUD_DEPLOY.md`](GOOGLE_CLOUD_DEPLOY.md) を参照
 - **Streamlit Cloud**（完全無料・最も簡単）
+  - GitHubと連携するだけで自動デプロイ
+  - データは一時的なストレージに保存（再起動で消える可能性あり）
 - **Railway**（無料枠あり・データ永続化可能）
+  - シンプルで高速
+  - データ永続化可能
 - **Render**（無料枠あり・簡単）
+  - 無料枠あり、設定が簡単
 
 詳細な手順は [`DEPLOY.md`](DEPLOY.md) を参照してください。
+
+### Supabase連携について
+
+クラウドデプロイ時は、データの永続化のためにSupabaseの使用を強く推奨します：
+
+1. **Supabaseプロジェクトの作成**: [Supabase](https://supabase.com) でプロジェクトを作成
+2. **データベーススキーマの設定**: `supabase_schema.sql` をSupabaseのSQL Editorで実行
+3. **環境変数の設定**: `SUPABASE_URL` と `SUPABASE_KEY` を設定
+4. **データの自動保存**: 設定後、すべてのデータがSupabaseに自動保存されます
+
+詳細は [`GOOGLE_CLOUD_DEPLOY.md`](GOOGLE_CLOUD_DEPLOY.md) の「Supabaseのセットアップ」セクションを参照してください。
 
 ### デプロイ前の確認事項
 
@@ -338,13 +389,14 @@ business-management/
 ## 注意事項
 
 - **データ保護**: アプリ更新時も過去のデータは自動的に保護されます。`data/`ディレクトリは`.gitignore`で除外されているため、Git操作でデータが失われることはありません。
-- **自動バックアップ**: アプリケーション起動時に、既存データがある場合は自動的にバックアップを作成します（24時間以内にバックアップが作成されていない場合のみ）。
+- **自動バックアップ**: アプリケーション起動時に、既存データがある場合は自動的にバックアップを作成します（24時間以内にバックアップが作成されていない場合のみ）。※ローカルファイルモードのみ
 - **データマイグレーション**: スキーマバージョン管理により、データ形式が変更されても既存データを保持します。
-- **データ整合性チェック**: 起動時にデータファイルの整合性を確認し、破損が検出された場合は最新のバックアップから自動的に復元を試みます。
+- **データ整合性チェック**: 起動時にデータファイルの整合性を確認し、破損が検出された場合は最新のバックアップから自動的に復元を試みます。※ローカルファイルモードのみ
+- **Supabase連携**: Supabase URL/Keyを設定すると、データはSupabaseデータベースに保存されます。クラウドデプロイ時はSupabaseの使用を強く推奨します。
 - **手動バックアップ**: 重要なデータの場合は、外部ストレージにもバックアップを保存することを推奨します。詳細は`DATA_PROTECTION.md`を参照してください。
 - **APIキー**: APIキーは機密情報です。`.gitignore`に含まれているため、Gitリポジトリにコミットされませんが、取り扱いには注意してください。
 - **セキュリティ**: 本アプリケーションはローカル環境での使用を想定しています。本番環境で使用する場合は、適切なセキュリティ対策を実施してください。
-- **クラウドデプロイ時**: Streamlit Cloudではデータは一時的なストレージに保存されます。永続化が必要な場合は、RailwayやRenderの使用を検討してください。
+- **クラウドデプロイ時**: Streamlit Cloudではデータは一時的なストレージに保存されます。永続化が必要な場合は、Supabase連携またはRailway/Renderの使用を検討してください。
 
 ## トラブルシューティング
 
@@ -355,8 +407,14 @@ business-management/
 - Gemini APIを使用する場合は、`google-generativeai`パッケージがインストールされているか確認してください。
 
 ### データが保存されない
-- `data/`ディレクトリへの書き込み権限があるか確認してください。
-- エラーメッセージを確認してください。
+- **ローカルファイルモードの場合**:
+  - `data/`ディレクトリへの書き込み権限があるか確認してください。
+  - エラーメッセージを確認してください。
+- **Supabaseモードの場合**:
+  - Supabase URL/Keyが正しく設定されているか確認してください。
+  - Supabaseプロジェクトがアクティブか確認してください。
+  - SupabaseのSQL Editorでテーブルが作成されているか確認してください（`supabase_schema.sql`を実行）。
+  - Supabaseのログを確認してください。
 
 ### 利用者が表示されない
 - 「利用者マスタ管理」で利用者が追加されているか確認してください。
@@ -381,6 +439,13 @@ business-management/
 このプロジェクトは内部使用を目的としています。
 
 ## 更新履歴
+
+- v2.1.0 (2025): Supabase連携・クラウドデプロイ対応版
+  - Supabaseデータベース連携機能の追加
+  - Google Cloud Runデプロイ対応（Dockerfile、cloudbuild.yaml）
+  - GitHub Actions CI/CD自動デプロイ機能
+  - データ保存方法の選択（ローカルファイル / Supabase）
+  - クラウドデプロイ時のデータ永続化対応
 
 - v2.0.0 (2025): 機能拡張版
   - ログイン機能の追加（スタッフアカウント管理）
