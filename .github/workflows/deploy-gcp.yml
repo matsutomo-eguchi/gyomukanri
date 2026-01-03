@@ -73,7 +73,7 @@ jobs:
             echo "Testing Supabase connection..."
 
             # Pythonスクリプトを実行
-            python3 << 'EOF'
+            cat << 'EOF' | python3
             import os
             import sys
 
