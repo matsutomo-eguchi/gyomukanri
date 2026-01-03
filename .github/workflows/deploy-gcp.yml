@@ -20,20 +20,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify secrets
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+          if [ -z "${GCP_SA_KEY}" ]; then
             echo "::error::GCP_SA_KEY secret is not set or is empty"
             exit 1
           fi
-          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+          if [ -z "${GCP_PROJECT_ID}" ]; then
             echo "::error::GCP_PROJECT_ID secret is not set or is empty"
             exit 1
           fi
-          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
+          if [ -z "${SUPABASE_URL}" ]; then
             echo "::error::SUPABASE_URL secret is not set or is empty"
             exit 1
           fi
-          if [ -z "${{ secrets.SUPABASE_KEY }}" ]; then
+          if [ -z "${SUPABASE_KEY}" ]; then
             echo "::error::SUPABASE_KEY secret is not set or is empty"
             exit 1
           fi
