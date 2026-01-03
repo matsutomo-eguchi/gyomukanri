@@ -52,12 +52,21 @@ jobs:
 
       - name: Deploy to Cloud Run
         run: |
+          # 環境変数の構築（空の値は除外）
+          ENV_VARS="SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}"
+          if [ -n "${{ secrets.GROK_API_KEY }}" ]; then
+            ENV_VARS="$ENV_VARS,GROK_API_KEY=${{ secrets.GROK_API_KEY }}"
+          fi
+          if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+            ENV_VARS="$ENV_VARS,GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
+          fi
+          
           gcloud run deploy $SERVICE_NAME \
             --image asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:${{ github.sha }} \
             --region $REGION \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_KEY=${{ secrets.SUPABASE_KEY }},GROK_API_KEY=${{ secrets.GROK_API_KEY }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            --set-env-vars "$ENV_VARS"
 
       - name: Show deployment URL
         run: |
