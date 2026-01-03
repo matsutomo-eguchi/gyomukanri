@@ -53,3 +53,7 @@ run.sh
 run.bat
 streamlit.log
 *.log
+
+# 機密情報ファイル
+GITHUB_SECRETS_VALUES.md
+github-actions-key.json
