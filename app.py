@@ -181,6 +181,32 @@ def render_login_page():
         is_supabase_enabled = st.session_state.data_manager._is_supabase_enabled()
         if is_supabase_enabled:
             st.info("🔗 Supabaseデータベースに接続しています")
+            
+            # 接続テストボタン
+            if st.button("🔍 接続テスト", help="Supabaseへの接続をテストします"):
+                try:
+                    test_result = st.session_state.data_manager.supabase_manager.test_connection()
+                    if test_result["connected"] and test_result["table_accessible"]:
+                        st.success(f"✅ 接続成功！データベース内のアカウント数: {test_result['account_count']}")
+                    else:
+                        error_detail = test_result.get("error", "不明なエラー")
+                        st.error(f"❌ 接続エラー: {error_detail}")
+                        if "Row Level Security" in error_detail or "permission denied" in error_detail.lower():
+                            st.warning("""
+                            ⚠️ **Row Level Security (RLS) が有効になっている可能性があります**
+                            
+                            **解決方法:**
+                            1. Supabase Dashboard → SQL Editor を開く
+                            2. 以下のSQLを実行してください:
+                            
+                            ```sql
+                            ALTER TABLE staff_accounts DISABLE ROW LEVEL SECURITY;
+                            ```
+                            
+                            または、`supabase_schema.sql` ファイルのRLS無効化コマンドを実行してください。
+                            """)
+                except Exception as e:
+                    st.error(f"接続テスト中にエラーが発生しました: {str(e)}")
         else:
             st.info("📁 ローカルファイルストレージを使用しています")
         
@@ -223,13 +249,34 @@ def render_login_page():
                             # より詳細なエラーメッセージ
                             error_msg = "ユーザーIDまたはパスワードが正しくありません"
                             if is_supabase_enabled:
-                                error_msg += "\n\n💡 ヒント: Supabaseデータベースに接続しています。データベースにアカウントが存在するか確認してください。"
+                                error_msg += "\n\n💡 ヒント:"
+                                error_msg += "\n- Supabaseデータベースにアカウントが存在するか確認してください"
+                                error_msg += "\n- 接続テストボタンでデータベース接続を確認できます"
+                                error_msg += "\n- Row Level Security (RLS) が有効になっている場合は、無効化してください"
                             else:
                                 error_msg += "\n\n💡 ヒント: ローカルファイルストレージを使用しています。アカウントが作成されているか確認してください。"
                             st.error(error_msg)
                     except Exception as e:
-                        st.error(f"ログイン処理中にエラーが発生しました: {str(e)}")
-                        st.exception(e)
+                        error_str = str(e)
+                        st.error(f"ログイン処理中にエラーが発生しました: {error_str}")
+                        
+                        # RLSエラーの場合、特別なメッセージを表示
+                        if "Row Level Security" in error_str or "permission denied" in error_str.lower():
+                            st.warning("""
+                            ⚠️ **Row Level Security (RLS) エラーが検出されました**
+                            
+                            **解決方法:**
+                            1. Supabase Dashboard → SQL Editor を開く
+                            2. 以下のSQLを実行してください:
+                            
+                            ```sql
+                            ALTER TABLE staff_accounts DISABLE ROW LEVEL SECURITY;
+                            ```
+                            
+                            または、`supabase_schema.sql` ファイルのRLS無効化コマンドを実行してください。
+                            """)
+                        else:
+                            st.exception(e)
         
         st.markdown("---")
         

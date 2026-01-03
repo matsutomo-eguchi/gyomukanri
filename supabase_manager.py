@@ -201,17 +201,36 @@ class SupabaseManager:
             import hashlib
             password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
             
+            # まず、テーブルにアクセスできるかテスト
+            try:
+                test_response = self.client.table("staff_accounts").select("id").limit(1).execute()
+                print(f"テーブルアクセステスト成功: {len(test_response.data) if test_response.data else 0}件のレコード")
+            except Exception as test_error:
+                print(f"⚠️ テーブルアクセステスト失敗: {test_error}")
+                print("💡 ヒント: Row Level Security (RLS) が有効になっている可能性があります。")
+                print("   supabase_schema.sql のRLS無効化コマンドを実行してください。")
+                raise
+            
             # ユーザーIDで検索
             response = self.client.table("staff_accounts").select("*").eq("user_id", user_id).eq("active", True).execute()
             
             if not response.data:
                 print(f"ユーザーID '{user_id}' が見つかりません。")
+                # 全アカウント数を確認（デバッグ用）
+                try:
+                    all_accounts = self.client.table("staff_accounts").select("user_id").execute()
+                    print(f"データベース内のアカウント数: {len(all_accounts.data) if all_accounts.data else 0}")
+                    if all_accounts.data:
+                        print(f"登録されているユーザーID: {[acc.get('user_id') for acc in all_accounts.data]}")
+                except Exception as e:
+                    print(f"アカウント一覧取得エラー: {e}")
                 return None
             
             account = response.data[0]
             
             # パスワードハッシュを比較
             if account["password_hash"] == password_hash:
+                print(f"✅ ログイン成功: {account['name']} ({user_id})")
                 return {
                     "user_id": account["user_id"],
                     "name": account["name"],
@@ -221,10 +240,44 @@ class SupabaseManager:
                 print(f"ユーザーID '{user_id}' のパスワードが一致しません。")
                 return None
         except Exception as e:
-            print(f"ログイン認証エラー: {e}")
+            error_msg = str(e)
+            print(f"❌ ログイン認証エラー: {error_msg}")
+            if "Row Level Security" in error_msg or "permission denied" in error_msg.lower():
+                print("💡 解決方法: SupabaseのSQL Editorで以下のコマンドを実行してください:")
+                print("   ALTER TABLE staff_accounts DISABLE ROW LEVEL SECURITY;")
             import traceback
             traceback.print_exc()
             return None
+    
+    def test_connection(self) -> Dict[str, any]:
+        """接続テストを実行"""
+        result = {
+            "enabled": self.is_enabled(),
+            "connected": False,
+            "error": None,
+            "table_accessible": False,
+            "account_count": 0
+        }
+        
+        if not self.is_enabled():
+            result["error"] = "Supabaseが有効になっていません"
+            return result
+        
+        try:
+            # テーブルにアクセスできるかテスト
+            response = self.client.table("staff_accounts").select("id").limit(1).execute()
+            result["connected"] = True
+            result["table_accessible"] = True
+            
+            # アカウント数を取得
+            count_response = self.client.table("staff_accounts").select("id", count="exact").execute()
+            result["account_count"] = count_response.count if hasattr(count_response, 'count') else len(count_response.data) if count_response.data else 0
+            
+        except Exception as e:
+            result["error"] = str(e)
+            result["connected"] = False
+        
+        return result
     
     # ========== 朝礼議事録管理 ==========
     

@@ -94,12 +94,32 @@ CREATE INDEX IF NOT EXISTS idx_users_master_active ON users_master(active);
 CREATE INDEX IF NOT EXISTS idx_staff_accounts_user_id ON staff_accounts(user_id);
 CREATE INDEX IF NOT EXISTS idx_tags_master_tag_type ON tags_master(tag_type);
 
--- Row Level Security (RLS) の設定（必要に応じて）
--- デフォルトではRLSを無効化していますが、セキュリティが必要な場合は有効化してください
+-- Row Level Security (RLS) の設定
+-- 重要: SupabaseではデフォルトでRLSが有効になっている場合があります
+-- アプリケーションが正常に動作するためには、RLSを無効化するか、適切なポリシーを設定する必要があります
 
--- RLSを有効化する場合の例（認証済みユーザーのみアクセス可能）
+-- RLSを無効化（anon keyを使用する場合に推奨）
+ALTER TABLE users_master DISABLE ROW LEVEL SECURITY;
+ALTER TABLE daily_reports DISABLE ROW LEVEL SECURITY;
+ALTER TABLE staff_accounts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE morning_meetings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tags_master DISABLE ROW LEVEL SECURITY;
+
+-- もしRLSを有効化する場合は、以下のポリシーを設定してください
 -- ALTER TABLE users_master ENABLE ROW LEVEL SECURITY;
--- CREATE POLICY "Allow authenticated users" ON users_master FOR ALL USING (auth.role() = 'authenticated');
+-- CREATE POLICY "Allow all operations" ON users_master FOR ALL USING (true) WITH CHECK (true);
+-- 
+-- ALTER TABLE daily_reports ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Allow all operations" ON daily_reports FOR ALL USING (true) WITH CHECK (true);
+-- 
+-- ALTER TABLE staff_accounts ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Allow all operations" ON staff_accounts FOR ALL USING (true) WITH CHECK (true);
+-- 
+-- ALTER TABLE morning_meetings ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Allow all operations" ON morning_meetings FOR ALL USING (true) WITH CHECK (true);
+-- 
+-- ALTER TABLE tags_master ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Allow all operations" ON tags_master FOR ALL USING (true) WITH CHECK (true);
 
 -- 初期データの投入（オプション）
 -- デフォルトタグの追加
