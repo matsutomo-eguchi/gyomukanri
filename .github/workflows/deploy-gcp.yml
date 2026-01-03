@@ -8,7 +8,6 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
   REGION: asia-northeast1
   SERVICE_NAME: business-management
 
@@ -19,6 +18,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Verify GCP secrets
+        run: |
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "::error::GCP_SA_KEY secret is not set or is empty"
+            exit 1
+          fi
+          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+            echo "::error::GCP_PROJECT_ID secret is not set or is empty"
+            exit 1
+          fi
+          echo "✓ GCP secrets are properly configured"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
