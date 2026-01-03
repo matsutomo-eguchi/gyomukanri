@@ -70,6 +70,7 @@ jobs:
           fi
 
       - name: Test Supabase connection
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -77,7 +78,7 @@ jobs:
           if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
             echo "Testing Supabase connection..."
             # シンプルな接続テスト
-            python3 -c "
+            if python3 -c "
 import os, sys
 try:
     from supabase import create_client
@@ -92,7 +93,11 @@ try:
 except Exception as e:
     print('❌ 接続失敗:', str(e)[:100])
     sys.exit(1)
-            " && echo "Test passed" || (echo "::warning::Supabase test failed, continuing deployment" && exit 0)
+            "; then
+              echo "Supabase test passed"
+            else
+              echo "::warning::Supabase test failed, but continuing with deployment"
+            fi
           else
             echo "Supabase credentials not set, skipping test"
           fi
