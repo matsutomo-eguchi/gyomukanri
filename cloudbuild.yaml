@@ -1,0 +1,52 @@
+# Google Cloud Build設定ファイル
+steps:
+  # Dockerイメージをビルド
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:$COMMIT_SHA'
+      - '-t'
+      - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:latest'
+      - '.'
+
+  # DockerイメージをArtifact Registryにプッシュ
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:$COMMIT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:latest'
+
+  # Cloud Runにデプロイ
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'business-management'
+      - '--image'
+      - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:$COMMIT_SHA'
+      - '--region'
+      - 'asia-northeast1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'SUPABASE_URL=${_SUPABASE_URL},SUPABASE_KEY=${_SUPABASE_KEY},GROK_API_KEY=${_GROK_API_KEY},GEMINI_API_KEY=${_GEMINI_API_KEY}'
+
+# イメージをArtifact Registryに保存
+images:
+  - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:$COMMIT_SHA'
+  - 'asia-northeast1-docker.pkg.dev/$PROJECT_ID/business-management/app:latest'
+
+# タイムアウト設定（10分）
+timeout: 600s
+
+# オプション: ビルドログの設定
+options:
+  logging: CLOUD_LOGGING_ONLY
+

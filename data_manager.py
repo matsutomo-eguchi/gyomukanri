@@ -8,6 +8,10 @@
 - アプリ更新時も過去のデータは保持されます
 - データファイルは .gitignore で除外されているため、Gitにコミットされません
 - コード更新（デプロイ）時もデータは自動的に保護されます
+
+Supabase連携:
+- 環境変数 SUPABASE_URL と SUPABASE_KEY が設定されている場合、Supabaseを使用
+- 設定されていない場合はローカルファイルストレージを使用
 """
 import json
 import os
@@ -18,6 +22,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
 import pandas as pd
+
+# Supabase連携（オプション）
+try:
+    from supabase_manager import SupabaseManager
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
+    SupabaseManager = None
 
 
 class DataManager:
@@ -35,6 +47,17 @@ class DataManager:
         """
         self.data_dir = Path(data_dir)
         
+        # Supabase連携の初期化（環境変数が設定されている場合）
+        self.supabase_manager = None
+        if SUPABASE_AVAILABLE and SupabaseManager:
+            try:
+                self.supabase_manager = SupabaseManager()
+                if self.supabase_manager.is_enabled():
+                    print("✅ Supabase連携が有効です。データはSupabaseに保存されます。")
+            except Exception as e:
+                print(f"Supabase初期化エラー: {e}")
+                print("ローカルファイルストレージを使用します。")
+        
         # データディレクトリの保護（既存データを保持）
         self._ensure_data_directory_protected()
         
@@ -51,25 +74,31 @@ class DataManager:
         self.backup_dir.mkdir(exist_ok=True)
         self.version_file = self.data_dir / ".schema_version"
         
-        # データマイグレーション（スキーマ変更時にもデータを保持）
-        self._migrate_data_if_needed()
-        
-        # デプロイ前の自動バックアップ（既存データがある場合）
-        self._auto_backup_on_startup()
-        
-        # データ整合性チェック
-        self._verify_data_integrity()
-        
-        # 利用者マスタの初期化（既存データは保護）
-        self._init_master_file()
-        # タグマスタの初期化（既存データは保護）
-        self._init_tags_file()
-        # スタッフアカウントの初期化（既存データは保護）
-        self._init_staff_accounts_file()
-        # 朝礼議事録の初期化（既存データは保護）
-        self._init_morning_meeting_file()
-        # 日別利用者記録の初期化（既存データは保護）
-        self._init_daily_users_file()
+        # Supabaseが無効な場合のみローカルファイル処理を実行
+        if not self._is_supabase_enabled():
+            # データマイグレーション（スキーマ変更時にもデータを保持）
+            self._migrate_data_if_needed()
+            
+            # デプロイ前の自動バックアップ（既存データがある場合）
+            self._auto_backup_on_startup()
+            
+            # データ整合性チェック
+            self._verify_data_integrity()
+            
+            # 利用者マスタの初期化（既存データは保護）
+            self._init_master_file()
+            # タグマスタの初期化（既存データは保護）
+            self._init_tags_file()
+            # スタッフアカウントの初期化（既存データは保護）
+            self._init_staff_accounts_file()
+            # 朝礼議事録の初期化（既存データは保護）
+            self._init_morning_meeting_file()
+            # 日別利用者記録の初期化（既存データは保護）
+            self._init_daily_users_file()
+    
+    def _is_supabase_enabled(self) -> bool:
+        """Supabaseが有効かどうかを返す"""
+        return self.supabase_manager is not None and self.supabase_manager.is_enabled()
     
     def _ensure_data_directory_protected(self):
         """
@@ -308,11 +337,15 @@ class DataManager:
     
     def get_active_users(self) -> List[str]:
         """アクティブな利用者名のリストを取得"""
+        if self._is_supabase_enabled():
+            return self.supabase_manager.get_active_users()
         users = self._load_master()
         return [u["name"] for u in users if u.get("active", True)]
     
     def get_all_users(self) -> List[Dict]:
         """全利用者情報を取得"""
+        if self._is_supabase_enabled():
+            return self.supabase_manager.get_all_users()
         return self._load_master()
     
     def get_user_by_name(self, name: str) -> Optional[Dict]:
@@ -349,6 +382,9 @@ class DataManager:
         valid_classifications = ["放課後等デイサービス", "児童発達支援"]
         if classification not in valid_classifications:
             classification = "放課後等デイサービス"  # デフォルト値
+        
+        if self._is_supabase_enabled():
+            return self.supabase_manager.add_user(name, classification)
         
         users = self._load_master()
         # 重複チェック
@@ -490,6 +526,15 @@ class DataManager:
             成功した場合True
         """
         try:
+            # Supabaseが有効な場合はSupabaseに保存
+            if self._is_supabase_enabled():
+                success = self.supabase_manager.save_daily_report(report_data)
+                # Markdown形式でも保存（担当利用者名または送迎区分がある場合）
+                if success and (("担当利用者名" in report_data and report_data["担当利用者名"]) or \
+                   ("送迎区分" in report_data and report_data["送迎区分"])):
+                    self._save_report_as_markdown(report_data)
+                return success
+            
             # CSVファイルが存在する場合は読み込み、存在しない場合は新規作成
             # 既存データは必ず保持される
             if self.report_file.exists():
@@ -778,6 +823,9 @@ class DataManager:
         Returns:
             日報データのDataFrame
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.get_reports(start_date, end_date)
+        
         if not self.report_file.exists():
             return pd.DataFrame()
         
@@ -903,6 +951,8 @@ class DataManager:
         Returns:
             タグのリスト
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.get_tags(tag_type)
         tags = self._load_tags()
         return tags.get(tag_type, [])
     
@@ -919,6 +969,9 @@ class DataManager:
         """
         if not tag_name or not tag_name.strip():
             return False
+        
+        if self._is_supabase_enabled():
+            return self.supabase_manager.add_tag(tag_type, tag_name)
         
         tags = self._load_tags()
         if tag_type not in tags:
@@ -943,6 +996,9 @@ class DataManager:
         Returns:
             成功した場合True
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.delete_tag(tag_type, tag_name)
+        
         tags = self._load_tags()
         if tag_type not in tags:
             return False
@@ -1100,6 +1156,9 @@ class DataManager:
         if not user_id or not password or not name:
             return False
         
+        if self._is_supabase_enabled():
+            return self.supabase_manager.create_staff_account(user_id, password, name)
+        
         accounts = self._load_staff_accounts()
         
         # 重複チェック
@@ -1130,6 +1189,9 @@ class DataManager:
         Returns:
             認証成功時はアカウント情報の辞書、失敗時はNone
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.verify_login(user_id, password)
+        
         accounts = self._load_staff_accounts()
         
         password_hash = self._hash_password(password)
@@ -1241,6 +1303,9 @@ class DataManager:
             成功した場合True
         """
         try:
+            if self._is_supabase_enabled():
+                return self.supabase_manager.save_morning_meeting(meeting_data)
+            
             meetings = self._load_morning_meetings()
             
             # タイムスタンプを追加
@@ -1269,6 +1334,9 @@ class DataManager:
         Returns:
             朝礼議事録のリスト
         """
+        if self._is_supabase_enabled():
+            return self.supabase_manager.get_morning_meetings(start_date, end_date)
+        
         meetings = self._load_morning_meetings()
         
         if start_date or end_date:

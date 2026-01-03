@@ -147,14 +147,20 @@ AI文章生成機能を使用する場合、APIキーを設定してください
 # Windows (PowerShell)
 $env:GROK_API_KEY="your_api_key_here"
 $env:GEMINI_API_KEY="your_gemini_api_key_here"
+$env:SUPABASE_URL="your_supabase_url"  # Supabase連携用（オプション）
+$env:SUPABASE_KEY="your_supabase_key"  # Supabase連携用（オプション）
 
 # Windows (CMD)
 set GROK_API_KEY=your_api_key_here
 set GEMINI_API_KEY=your_gemini_api_key_here
+set SUPABASE_URL=your_supabase_url
+set SUPABASE_KEY=your_supabase_key
 
 # macOS/Linux
 export GROK_API_KEY="your_api_key_here"
 export GEMINI_API_KEY="your_gemini_api_key_here"
+export SUPABASE_URL="your_supabase_url"
+export SUPABASE_KEY="your_supabase_key"
 ```
 
 #### 方法2: Streamlit Secrets（Streamlit Cloud使用時）
@@ -162,14 +168,17 @@ export GEMINI_API_KEY="your_gemini_api_key_here"
 ```toml
 GROK_API_KEY = "your_api_key_here"
 GEMINI_API_KEY = "your_gemini_api_key_here"
+SUPABASE_URL = "your_supabase_url"  # Supabase連携用（オプション）
+SUPABASE_KEY = "your_supabase_key"  # Supabase連携用（オプション）
 ```
 
 #### 方法3: アプリ内設定画面
 アプリ起動後、「設定」ページからAPIキーを入力できます。
 
-**APIキーの用途**:
+**環境変数の用途**:
 - **Grok API**: 日報文章生成、事故報告・ヒヤリハット報告の文章生成に使用
 - **Gemini API**: 音声から朝礼議事録を自動生成する機能に使用（オプション）
+- **Supabase URL/Key**: Supabaseデータベース連携用（設定するとデータがSupabaseに保存されます）
 
 ### 4. アプリケーションの起動
 
@@ -263,26 +272,35 @@ streamlit run app.py
 ```
 business-management/
 ├── app.py                        # メインアプリケーション
-├── data_manager.py               # データ管理モジュール
+├── data_manager.py               # データ管理モジュール（Supabase連携対応）
+├── supabase_manager.py           # Supabase連携モジュール ⭐ NEW
 ├── ai_helper.py                  # AI文章生成モジュール（Grok API / Gemini API）
 ├── accident_report_generator.py  # 事故報告書生成モジュール
 ├── hiyari_hatto_generator.py     # ヒヤリハット報告書生成モジュール
 ├── requirements.txt              # 依存パッケージ
 ├── env_example.txt               # 環境変数サンプル
+├── Dockerfile                    # Google Cloud Run用Dockerfile ⭐ NEW
+├── cloudbuild.yaml              # Google Cloud Build設定 ⭐ NEW
+├── supabase_schema.sql          # Supabaseデータベーススキーマ ⭐ NEW
 ├── .gitignore                    # Git除外設定
+├── .dockerignore                 # Docker除外設定 ⭐ NEW
 ├── README.md                     # このファイル
 ├── 仕様書.md                     # アプリケーション仕様書
 ├── DEPLOY.md                     # デプロイ詳細ガイド
 ├── DEPLOY_QUICKSTART.md          # デプロイクイックスタートガイド
 ├── DEPLOY_CHECKLIST.md           # デプロイチェックリスト
+├── GOOGLE_CLOUD_DEPLOY.md        # Google Cloudデプロイガイド ⭐ NEW
+├── .github/                      # GitHub Actions設定 ⭐ NEW
+│   └── workflows/
+│       └── deploy-gcp.yml        # Google Cloud Run自動デプロイワークフロー
 ├── .streamlit/                   # Streamlit設定ディレクトリ（存在する場合）
 │   └── config.toml               # Streamlitパフォーマンス設定
-└── data/                         # データ保存ディレクトリ（自動生成）
+└── data/                         # データ保存ディレクトリ（自動生成、Supabase使用時は未使用）
     ├── users_master.json         # 利用者マスタ
     ├── daily_reports.csv         # 日報データ
     ├── tags_master.json          # タグマスタ
     ├── staff_accounts.json       # スタッフアカウント
-    ├── morning_meetings.json      # 朝礼議事録
+    ├── morning_meetings.json     # 朝礼議事録
     ├── config.json               # 設定ファイル
     ├── reports/                  # 日報Markdownファイル
     └── backups/                  # バックアップファイル
@@ -300,7 +318,12 @@ business-management/
 
 以下のデプロイ方法が利用可能です：
 
-- **Streamlit Cloud**（推奨・完全無料・最も簡単）
+- **Google Cloud Run**（推奨・Supabase連携・GitHub Actions CI/CD）⭐ **NEW**
+  - 本番環境向けの堅牢なデプロイ
+  - Supabaseによるデータベース永続化
+  - GitHub Actionsによる自動デプロイ
+  - 詳細は [`GOOGLE_CLOUD_DEPLOY.md`](GOOGLE_CLOUD_DEPLOY.md) を参照
+- **Streamlit Cloud**（完全無料・最も簡単）
 - **Railway**（無料枠あり・データ永続化可能）
 - **Render**（無料枠あり・簡単）
 
