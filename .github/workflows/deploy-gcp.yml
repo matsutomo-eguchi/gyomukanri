@@ -55,13 +55,13 @@ jobs:
           fi
 
       - name: Install Python dependencies for testing
-        if: ${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_KEY != '' }}
+        if: ${{ secrets.SUPABASE_URL && secrets.SUPABASE_KEY }}
         run: |
           python3 -m pip install --upgrade pip
           pip install supabase>=2.0.0
 
       - name: Test Supabase connection
-        if: ${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_KEY != '' }}
+        if: ${{ secrets.SUPABASE_URL && secrets.SUPABASE_KEY }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
